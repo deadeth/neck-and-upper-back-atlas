@@ -45,8 +45,10 @@ SKULL = ["occipital bone", "frontal bone", "sphenoid bone", "mandible", "hyoid b
 RIBS = [f"left {o} rib" for o in ORD] + [f"right {o} rib" for o in ORD]
 STERNUM = ["manubrium", "body of sternum", "xiphoid process"]
 
-# Regexes that pick the many small bones of a hand or foot ("{s}" = left/right).
-HAND_RE = r"^(?=.*\b{s}\b).*(capitate|hamate|lunate|pisiform|scaphoid|trapezium|trapezoid|triquetr|metacarpal|finger|thumb)"
+# The wrist and palm move as one piece; each finger bone is its own part so the fingers can curl.
+CARPUS = ["capitate", "hamate", "lunate", "pisiform", "scaphoid", "trapezium", "trapezoid"]
+METACARPALS = ["first", "second", "third", "fourth", "fifth"]
+DIGITS = ["thumb", "index finger", "middle finger", "ring finger", "little finger"]   # digit 1..5
 FOOT_RE = r"^(?=.*\b{s}\b).*(calcaneus|cuboid|cuneiform|talus|metatarsal|toe|navicular|sesamoid)"
 
 MUSCLE_KEEP = 0.72      # fraction of triangles kept per muscle mesh

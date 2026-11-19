@@ -351,12 +351,20 @@ async function boot() {
 
   // hooks for automated checks
   window.__atlas = {
-    go, home, nav, anatomy, figure,
+    go, home, nav, anatomy, figure, render, moves: mods[2].MOVE_IDS,
     /** draw one exercise at a point in its loop and return the frame as a data URL */
     snap(id, f, view) {
       nav.length = 1; nav.push({ view: "exercise", id }); render();
       if (view) { const [fr, an] = view.split("/"); figure.setView(fr || undefined, an || undefined); }
       figure.setPlaying(false); figure.seek(f); updateSteps(figure.update(0));
+      renderer.render(figure.scene, figure.camera);
+      return canvas.toDataURL("image/jpeg", 0.8);
+    },
+    /** the same, with the camera on one hand */
+    snapHand(id, f, side, az, el, dist) {
+      nav.length = 1; nav.push({ view: "exercise", id }); render();
+      figure.setPlaying(false); figure.seek(f); updateSteps(figure.update(0));
+      figure.handCam(side, az, el, dist); figure.update(0);
       renderer.render(figure.scene, figure.camera);
       return canvas.toDataURL("image/jpeg", 0.8);
     },

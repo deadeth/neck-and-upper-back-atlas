@@ -19,7 +19,7 @@ import trimesh
 import fast_simplification
 from scipy.spatial import cKDTree
 
-from parts import (MUSCLES, SKULL, CERV, THOR, LUMB, RIBS, STERNUM, HAND_RE, FOOT_RE, LEVELS,
+from parts import (MUSCLES, SKULL, CERV, THOR, LUMB, RIBS, STERNUM, CARPUS, METACARPALS, DIGITS, FOOT_RE, LEVELS,
                    MUSCLE_KEEP, CUT_Z, HUMERUS_CUT_Z, ORIGIN)
 
 CT = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
@@ -140,6 +140,54 @@ def skin_weights(p, f, allowed, trees):
     return idx, wq
 
 
+FINGER_JOINTS = {}   # filled by hand_rig: finger joint centres in model space
+
+
+def hand_rig(bones, s, S):
+    """Palm frame and finger hinges for one hand, in model space.
+
+    Returns the palm normal (pointing out of the palm), the direction the fingers run, and one
+    flexion axis per digit. Finger joint centres go into FINGER_JOINTS.
+    """
+    unit = lambda v: v / np.linalg.norm(v)
+    M = lambda name: to_model(bones[name][0])
+
+    def long_axis(v, towards_from):
+        """principal axis of a bone, pointing away from the given point"""
+        c = v.mean(axis=0)
+        a = np.linalg.svd(v - c, full_matrices=False)[2][0]
+        return a if np.dot(c - towards_from, a) > 0 else -a
+
+    mc = {i: M(f"{s} {o} metacarpal bone") for i, o in enumerate(METACARPALS, start=1)}
+    palm_pts = np.vstack([mc[i] for i in (2, 3, 4, 5)])
+    centre = palm_pts.mean(axis=0)
+    carpal = np.vstack([M(f"{s} {c}") for c in ("capitate", "lunate", "hamate", "scaphoid")]).mean(axis=0)
+    normal = np.linalg.svd(palm_pts - centre, full_matrices=False)[2][2]      # thinnest direction of the palm
+    if np.dot(M(f"{s} pisiform").mean(axis=0) - carpal, normal) < 0:           # the pisiform sits on the palm side
+        normal = -normal
+    fingers = long_axis(mc[3], carpal)
+    fingers = unit(fingers - normal * np.dot(fingers, normal))
+    ulnar = unit(mc[5].mean(axis=0) - mc[2].mean(axis=0))
+    out = {"palmN" + S: normal, "palmG" + S: fingers}
+    for d, digit in enumerate(DIGITS, start=1):
+        parent = mc[d]
+        axis = None
+        for seg in ("proximal", "middle", "distal"):
+            name = f"{seg} phalanx of {s} {digit}"
+            if name not in bones:
+                continue
+            v = M(name)
+            a = long_axis(v, parent.mean(axis=0))
+            t = (v - v.mean(axis=0)) @ a
+            FINGER_JOINTS[f"f{d}{seg[0]}{S}"] = [round(float(x), 3) for x in v[t < t.min() + 0.2 * (t.max() - t.min())].mean(axis=0)]
+            if axis is None:
+                # fingers curl towards the palm; the thumb curls across it
+                axis = unit(np.cross(a, unit(ulnar + 0.6 * normal) if d == 1 else normal))
+            parent = v
+        out[f"flex{d}{S}"] = axis
+    return {k: [round(float(x), 4) for x in v] for k, v in out.items()}
+
+
 def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
     muscles = read_glb(anatomy_path)
     bones = read_glb(skeleton_path)
@@ -191,7 +239,13 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         bone("humerus-full", [f"{s} humerus"], "hum" + S, "humerus", 0.7, False, True, S)
         bone("ulna", [f"{s} ulna"], "ulna" + S, "forearm", 1.0, False, True, S)
         bone("radius", [f"{s} radius"], "rad" + S, "forearm", 1.0, False, True, S)
-        bone("hand", matching(HAND_RE, s), "rad" + S, "hand", 0.4, False, True, S, as_one=True)
+        palm = [f"{s} {c}" for c in CARPUS if f"{s} {c}" in bones] + [f"{s} {o} metacarpal bone" for o in METACARPALS]
+        bone("hand", palm, "hand" + S, "hand", 0.5, False, True, S, as_one=True)
+        for d, digit in enumerate(DIGITS, start=1):
+            for seg in ("proximal", "middle", "distal"):
+                name = f"{seg} phalanx of {s} {digit}"
+                if name in bones:   # the thumb has no middle phalanx
+                    bone("phalanx", [name], f"f{d}{seg[0]}{S}", "hand", 0.7, False, True, S, as_one=True)
         bone("femur", [f"{s} femur"], "fem" + S, "femur", 1.0, False, True, S)
         bone("shin", [f"{s} tibia", f"{s} fibula", f"{s} patella"], "tib" + S, "shin", 1.0, False, True, S)
         bone("foot", matching(FOOT_RE, s), "foot" + S, "foot", 0.3, False, True, S, as_one=True)
@@ -230,8 +284,8 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         J["rad" + S] = rad[rad[:, 2] > rad[:, 2].max() - 12].mean(axis=0)          # radial head
         X["pronEnd" + S] = uln[uln[:, 2] < uln[:, 2].min() + 12].mean(axis=0)      # ulnar head
         fa = np.vstack([rad, uln])
-        X["wrist" + S] = fa[fa[:, 2] < fa[:, 2].min() + 12].mean(axis=0)
-        X["palm" + S] = pts(*[f"{s} {o} metacarpal bone" for o in ("second", "third", "fourth", "fifth")]).mean(axis=0)
+        J["hand" + S] = fa[fa[:, 2] < fa[:, 2].min() + 12].mean(axis=0)            # wrist centre
+        X["palm" + S] = pts(*[f"{s} {o} metacarpal bone" for o in METACARPALS[1:]]).mean(axis=0)
         cl = bones[f"{s} clavicle"][0]
         J["clav" + S] = cl[med(cl) < med(cl).min() + 10].mean(axis=0)
         X["acrom" + S] = cl[med(cl) > med(cl).max() - 10].mean(axis=0)
@@ -302,8 +356,10 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         if np.dot(hinge, np.cross(axis, [0, 0, 1])) < 0:
             hinge = -hinge
         rig["hinge" + S] = r3(hinge)
-        for k in ("wrist", "palm", "pronEnd", "acrom"):
+        for k in ("palm", "pronEnd", "acrom"):
             rig[k + S] = r3(to_model(X[k + S]))
+        rig.update(hand_rig(bones, "left" if S == "L" else "right", S))
+    rig["joints"].update(FINGER_JOINTS)
 
     with open(out_dir + "/model.json", "w") as fh:
         json.dump({"parts": manifest, "levels": levels, "rig": rig,

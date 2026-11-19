@@ -8,6 +8,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { geometry } from "./model.js";
 import { MOVES, BASES, SEAT } from "./moves.js";
 
+export const MOVE_IDS = MOVES;   // for checks
 const D2R = Math.PI / 180, CM = 0.01;
 const V3 = THREE.Vector3;
 const LAYER_COLOUR = { 1: 0xb44a40, 2: 0xa23c38, 3: 0x8f3436, 4: 0x7c2d35 };
@@ -21,7 +22,22 @@ const PARENT = {
   femL: "pelvis", tibL: "femL", footL: "tibL", femR: "pelvis", tibR: "femR", footR: "tibR",
   humL: null, ulnaL: null, radL: "ulnaL", humR: null, ulnaR: null, radR: "ulnaR",
 };
+// wrist, then each finger as a chain of hinges: f<digit><p|m|d><side>, digit 1 = thumb
+const DIGITS = [1, 2, 3, 4, 5];
+const segs = (d) => (d === 1 ? ["p", "d"] : ["p", "m", "d"]);
+for (const S of "LR") {
+  PARENT["hand" + S] = "rad" + S;
+  for (const d of DIGITS) {
+    let prev = "hand" + S;
+    for (const seg of segs(d)) { PARENT[`f${d}${seg}${S}`] = prev; prev = `f${d}${seg}${S}`; }
+  }
+}
 const LUMBAR = ["l5", "l4", "l3", "l2", "l1"], LOWER_NECK = ["c7", "c6", "c5", "c4", "c3", "c2"];
+// Finger shapes as [knuckle, middle joint, end joint, thumb base, thumb tip] in degrees of extra curl.
+// 0 is the scanned hand, which is already loosely curled.
+const CURL = { rest: [0, 0, 0, 0, 0], flat: [-26, -24, -12, -6, -6], cup: [-12, -10, -4, 0, 0], wrap: [16, 26, 14, 6, 8], hook: [8, 34, 22, 0, 0], grip: [34, 52, 30, 14, 28] };
+const curlOf = (spec) => (Array.isArray(spec.curl) ? spec.curl : CURL[spec.curl || "rest"]);
+const SNAP_JOINTS = { head: ["head"], chest: ["thorax", "clavL", "clavR"], thigh: ["femL", "femR"] };
 
 const NUM = ["lum", "thor", "neck", "head", "shL", "shR", "hipL", "hipR"];
 const ZERO = {
@@ -29,7 +45,8 @@ const ZERO = {
   shL: [0, 0, 0], shR: [0, 0, 0], hipL: [0, 0], hipR: [0, 0], kneeL: 0, kneeR: 0, ankL: 0, ankR: 0,
 };
 
-const mirrorArm = (a) => ({ ...a, p: [-a.p[0], a.p[1], a.p[2]], pole: [-a.pole[0], a.pole[1], a.pole[2]] });
+const flipX = (v) => v && [-v[0], v[1], v[2]];
+const mirrorArm = (a) => ({ ...a, p: flipX(a.p), pole: flipX(a.pole), n: flipX(a.n), g: flipX(a.g), at: flipX(a.at) });
 /** expand the "both sides" shorthands of one pose layer */
 function expand(layer) {
   const o = { ...layer };
@@ -110,12 +127,13 @@ export function createFigure(canvas, model, buffer, meta) {
   for (const n of [...LUMBAR, "thorax", ...LOWER_NECK, "c1", "head"]) bone[n].rotation.order = "YXZ";
   for (const n of ["femL", "femR"]) bone[n].rotation.order = "ZXY";
 
-  const muscles = [];
+  const muscles = [], rigid = {};
   for (const part of model.parts) {
     if (!part.ex || part.kind !== "bone") continue;
     const m = new THREE.Mesh(geometry(part, buffer, CM), mats.bone);
     m.castShadow = true;
     holder[part.joint].add(m);
+    (rigid[part.joint] ||= []).push(new THREE.Mesh(m.geometry, mats.bone));   // untransformed copy, in rest coordinates
   }
   scene.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton(R.skin.map((n) => bone[n]));   // bind pose = rest pose
@@ -147,9 +165,42 @@ export function createFigure(canvas, model, buffer, meta) {
       scapRest: bone["scap" + S].position.clone(), clavPos: bone["clav" + S].position.clone(),
       nScap: new V3(-0.5 * sx, 0, 0.866),                         // normal of the shoulder blade's plane
       S: new V3(), E: new V3(), T: new V3(),
+      // hand: wrist centre, palm centre, palm frame (n out of the palm, g along the fingers)
+      wFromP0: rest["hand" + S].clone().sub(p0), palmFromW: mark("palm" + S).sub(rest["hand" + S]),
+      n0: new V3().fromArray(R["palmN" + S]).normalize(), g0: new V3().fromArray(R["palmG" + S]).normalize(),
+      flex: DIGITS.map((d) => new V3().fromArray(R[`flex${d}${S}`]).normalize()),
+      tw: 0, handQ: new THREE.Quaternion(), nW: new V3(), restBasisT: new THREE.Matrix4(),
     };
+    handBasis(arms[S].n0, arms[S].g0, arms[S].restBasisT).transpose();
+    arms[S].barQ = new THREE.Quaternion().setFromUnitVectors(new V3(0, 0, 1), new V3().crossVectors(arms[S].n0, arms[S].g0).normalize());
+  }
+  /** orthonormal frame with columns n, g (made square to n), n x g */
+  function handBasis(n, g, m) {
+    const gg = g.clone().addScaledVector(n, -g.dot(n)).normalize();
+    return m.makeBasis(n, gg, new V3().crossVectors(n, gg));
   }
   const frames = { chest: bone.thorax, head: bone.head, neck: bone.c7, pelvis: bone.pelvis, world: scene };
+  const frameOf = (spec, side) => (spec.f === "thigh" ? bone["fem" + side] : frames[spec.f]);
+  const frameJoint = (spec, side) => (spec.f === "thigh" ? "fem" + side : { chest: "thorax", head: "head", neck: "c7", pelvis: "pelvis" }[spec.f]);
+
+  // A hand that rests on a bone is placed by casting a ray at the bone in the rest pose, so the
+  // palm sits just clear of the surface instead of hovering above it or sinking into it.
+  const snapCache = new Map(), caster = new THREE.Raycaster();
+  function palmPoint(spec, side) {
+    if (!spec.snap) return spec.p;
+    const key = side + JSON.stringify([spec.f, spec.p, spec.n, spec.at, spec.clear]);
+    if (snapCache.has(key)) return snapCache.get(key);
+    const origin = rest[frameJoint(spec, side)];
+    const p = new V3().fromArray(spec.p);
+    const dir = spec.at ? new V3().fromArray(spec.at).sub(p).normalize() : new V3().fromArray(spec.n).normalize();
+    caster.set(p.clone().add(origin).addScaledVector(dir, -0.12), dir);
+    caster.far = 0.4;
+    const targets = SNAP_JOINTS[spec.f].filter((j) => spec.f !== "thigh" || j.endsWith(side)).flatMap((j) => rigid[j] || []);
+    const hit = caster.intersectObjects(targets, false)[0];
+    const out = hit ? hit.point.clone().addScaledVector(dir, -(spec.clear || 0.016)).sub(origin).toArray() : spec.p;
+    snapCache.set(key, out);
+    return out;
+  }
 
   // ---------- props ----------
   const props = new THREE.Group();
@@ -200,7 +251,11 @@ export function createFigure(canvas, model, buffer, meta) {
           end.rotation.x = Math.PI / 2; end.position.z = z; end.castShadow = true; g.add(end);
         }
         props.add(g);
-        dyn.push(() => g.position.copy(arms[side].T));
+        dyn.push(() => {
+          const a = arms[side];
+          g.position.copy(a.T).addScaledVector(a.nW, 0.022);   // the bar lies across the palm
+          g.quaternion.copy(a.handQ).multiply(a.barQ);
+        });
       }
     },
     bandFront: () => {
@@ -208,14 +263,14 @@ export function createFigure(canvas, model, buffer, meta) {
       const anchor = new V3(0, 1.22, 1.28);
       for (const side of ["L", "R"]) {
         const set = segment(mats.band, 0.007);
-        dyn.push(() => set(anchor, arms[side].T));
+        dyn.push(() => set(anchor, arms[side].T.clone().addScaledVector(arms[side].nW, 0.02)));
       }
     },
     bandSide: () => {
       box(0.04, 1.3, 0.04, [-0.9, 0.65, 0.22]);
       const anchor = new V3(-0.88, 1.1, 0.22);
       const set = segment(mats.band, 0.007);
-      dyn.push(() => set(anchor, arms.L.T));
+      dyn.push(() => set(anchor, arms.L.T.clone().addScaledVector(arms.L.nW, 0.02)));
     },
   };
 
@@ -312,63 +367,150 @@ export function createFigure(canvas, model, buffer, meta) {
     basis(aR, hR, mB);
     return out.setFromRotationMatrix(mA.multiply(mB.transpose()));
   }
-  function armTarget(spec, out) {
-    out.fromArray(spec.p);
-    if (spec.f !== "world") frames[spec.f].localToWorld(out);
+  function armTarget(spec, side, out) {
+    out.fromArray(palmPoint(spec, side));
+    if (spec.f !== "world") frameOf(spec, side).localToWorld(out);
     return out;
   }
+  /** direction given in a spec's frame -> world */
+  function frameDir(spec, side, arr, out) {
+    out.fromArray(arr);
+    if (spec.f !== "world") out.applyQuaternion(frameOf(spec, side).getWorldQuaternion(q));
+    return out.normalize();
+  }
 
-  function solveArm(side, A, B, u, shOff) {
-    const a = arms[side], scap = bone["scap" + side], clav = bone["clav" + side];
-    const thorQ = bone.thorax.getWorldQuaternion(q).clone();
-    armTarget(A, v1); armTarget(B, v2);
-    const T = a.T.lerpVectors(v1, v2, u);
-    const pole = new V3().fromArray(lerpArr(A.pole, B.pole, u)).applyQuaternion(thorQ).normalize();
-    const tw = ((A.tw || 0) + ((B.tw || 0) - (A.tw || 0)) * u) * D2R * a.sx;
+  /** two-bone IK from the shoulder: where the elbow goes for a given end point and elbow direction */
+  function ik(S, target, upper, fore, pole) {
+    const d = target.clone().sub(S);
+    let L = d.length();
+    const maxL = upper + fore - 0.002, minL = Math.abs(upper - fore) + 0.03;
+    if (L > maxL) { d.multiplyScalar(maxL / L); L = maxL; }
+    if (L < minL) { d.multiplyScalar(minL / Math.max(L, 1e-6)); L = minL; }
+    const nrm = d.clone().normalize();
+    const cosA = (upper * upper + L * L - fore * fore) / (2 * upper * L);
+    const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+    const perp = pole.clone().addScaledVector(nrm, -pole.dot(nrm));
+    if (perp.lengthSq() < 1e-8) perp.set(0, -1, 0).addScaledVector(nrm, nrm.y);
+    perp.normalize();
+    return {
+      E: S.clone().addScaledVector(nrm, upper * cosA).addScaledVector(perp, upper * sinA),
+      end: S.clone().addScaledVector(nrm, L),                    // the end point after clamping to arm's length
+      hinge: new V3().crossVectors(perp, nrm).normalize(),       // elbow hinge axis
+    };
+  }
+  /** wrist position relative to the elbow, in forearm coordinates, for a given forearm rotation */
+  const wristRel = (a, tw) => a.wFromP0.clone().applyAxisAngle(a.pronAxis, tw).add(a.p0FromE);
 
-    // where the palm sits relative to the elbow once the forearm has rotated
-    const palmRel = a.palmFromP0.clone().applyAxisAngle(a.pronAxis, tw).add(a.p0FromE);
-    const fore = palmRel.length(), fR = palmRel.normalize();
+  /** the hand orientation a key asks for: palm facing n (or towards a point), fingers along g */
+  function wantedHand(a, side, spec, palm, pole, out) {
+    const n = spec.at ? armTarget({ ...spec, p: spec.at, snap: false }, side, new V3()).sub(palm).normalize()
+      : frameDir(spec, side, spec.n || [0, 0, 1], new V3());
+    let g;
+    if (spec.g && !spec.along) g = frameDir(spec, side, spec.g, new V3());
+    else {
+      // fingers carry on along the forearm
+      const w = palm.clone().addScaledVector(n, 0);   // close enough to the wrist for a direction
+      g = w.sub(ik(a.S, palm, a.upper, wristRel(a, 0).length() + 0.06, pole).E).normalize();
+    }
+    if (spec.along) n.addScaledVector(g, -n.dot(g)).normalize();   // keep the fingers' line, square the palm to it
+    handBasis(n, g, mA);
+    return out.setFromRotationMatrix(mA.multiply(a.restBasisT));
+  }
 
-    scap.position.set(a.scapRest.x + shOff[0] * a.sx, a.scapRest.y + shOff[1], a.scapRest.z + shOff[2]);
-    let upRot = 0, nrm, perp, L, cosA, sinA;
+  const qU = new THREE.Quaternion(), qRel = new THREE.Quaternion();
+  /**
+   * Solve one arm for one key under the current body pose. Returns joint rotations, so that two
+   * keys can be blended joint by joint: the arm then swings round between poses instead of the
+   * hand sliding along a straight line through the body.
+   */
+  function solveKey(side, spec, thorQ) {
+    const a = arms[side], scap = bone["scap" + side];
+    const palm = armTarget(spec, side, new V3());
+    const pole = new V3().fromArray(spec.pole).applyQuaternion(thorQ).normalize();
+
+    // the shoulder blade turns upward by about a third of the arm's lift
+    const reach = wristRel(a, 0).length() + 0.06;
+    let upRot = 0;
     for (let pass = 0; pass < 2; pass++) {
       scap.quaternion.setFromAxisAngle(a.nScap, upRot * a.sx);
       scap.updateMatrixWorld(true);
       a.S.copy(a.shLocal).applyMatrix4(scap.matrixWorld);
-      const d = T.clone().sub(a.S);
-      L = d.length();
-      const maxL = a.upper + fore - 0.002, minL = Math.abs(a.upper - fore) + 0.03;
-      if (L > maxL) { d.multiplyScalar(maxL / L); L = maxL; }
-      if (L < minL) { d.multiplyScalar(minL / Math.max(L, 1e-6)); L = minL; }
-      nrm = d.clone().normalize();
-      cosA = (a.upper * a.upper + L * L - fore * fore) / (2 * a.upper * L);
-      sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
-      perp = pole.clone().addScaledVector(nrm, -pole.dot(nrm));
-      if (perp.lengthSq() < 1e-8) perp.set(0, -1, 0).addScaledVector(nrm, nrm.y);
-      perp.normalize();
-      a.E.copy(a.S).addScaledVector(nrm, a.upper * cosA).addScaledVector(perp, a.upper * sinA);
       if (pass === 0) {
-        // the shoulder blade turns upward by about a third of how far the arm is raised
         const down = new V3(0, -1, 0).applyQuaternion(thorQ);
-        const elev = a.E.clone().sub(a.S).normalize().angleTo(down);
+        const elev = ik(a.S, palm, a.upper, reach, pole).E.sub(a.S).normalize().angleTo(down);
         upRot = THREE.MathUtils.clamp((elev - 30 * D2R) * 0.33, 0, 45 * D2R);
         if (upRot < 1e-4) break;
       }
     }
-    T.copy(a.S).addScaledVector(nrm, L);   // the palm, after any clamping to arm's length
 
+    // wrist from palm, then elbow from wrist; the forearm's rotation and the wrist's bend make up the rest
+    const qD = wantedHand(a, side, spec, palm, pole, new THREE.Quaternion());
+    const W = palm.clone().sub(a.palmFromW.clone().applyQuaternion(qD));
+    let tw = 0, sol;
+    for (let it = 0; it < 4; it++) {
+      const wr = wristRel(a, tw);
+      sol = ik(a.S, W, a.upper, wr.length(), pole);
+      frameQuat(wr.clone().normalize(), a.hR, sol.end.clone().sub(sol.E).normalize(), sol.hinge, qU);
+      qRel.copy(qU).invert().multiply(qD);
+      // the part of qRel that is a turn about the forearm's axis
+      let pron = 2 * Math.atan2(qRel.x * a.pronAxis.x + qRel.y * a.pronAxis.y + qRel.z * a.pronAxis.z, qRel.w) * a.sx;
+      // pronation from the scanned palm-forward pose runs from about -25 to 185 degrees; wrap in the
+      // middle of the range the forearm can't reach so a borderline pose can't flip between the two ends
+      while (pron < -100 * D2R) pron += 2 * Math.PI;
+      while (pron >= 260 * D2R) pron -= 2 * Math.PI;
+      tw = THREE.MathUtils.clamp(pron, -25 * D2R, 185 * D2R) * a.sx;
+    }
+    const bend = new THREE.Quaternion().setFromAxisAngle(a.pronAxis, tw).invert().multiply(qRel);
+    const bendAngle = 2 * Math.acos(Math.min(1, Math.abs(bend.w)));
+    if (bendAngle > 75 * D2R) bend.slerp(new THREE.Quaternion(), 1 - (75 * D2R) / bendAngle);   // wrists only bend so far
+    const hum = frameQuat(a.aR, a.hR, sol.E.clone().sub(a.S).normalize(), sol.hinge, new THREE.Quaternion());
+    return { upRot, hum, elbow: hum.clone().invert().multiply(qU), tw, bend, curl: curlOf(spec) };
+  }
+
+  const qT = new THREE.Quaternion();
+  function solveArm(side, A, B, u, shOff) {
+    const a = arms[side], scap = bone["scap" + side], clav = bone["clav" + side];
+    const thorQ = bone.thorax.getWorldQuaternion(new THREE.Quaternion());
+    scap.position.set(a.scapRest.x + shOff[0] * a.sx, a.scapRest.y + shOff[1], a.scapRest.z + shOff[2]);
+
+    const k = solveKey(side, A, thorQ);
+    if (B !== A) {
+      const kb = solveKey(side, B, thorQ);
+      k.upRot += (kb.upRot - k.upRot) * u;
+      k.hum.slerp(kb.hum, u);
+      k.elbow.slerp(kb.elbow, u);
+      k.tw += (kb.tw - k.tw) * u;
+      k.bend.slerp(kb.bend, u);
+      k.curl = k.curl.map((v, i) => v + (kb.curl[i] - v) * u);
+    }
+
+    scap.quaternion.setFromAxisAngle(a.nScap, k.upRot * a.sx);
+    scap.updateMatrixWorld(true);
+    a.S.copy(a.shLocal).applyMatrix4(scap.matrixWorld);
     // the collarbone pivots at the breastbone so its outer end follows the shoulder blade
     const acrom = a.acromLocal.clone().applyQuaternion(scap.quaternion).add(scap.position);
     clav.quaternion.setFromUnitVectors(a.clavRestDir, acrom.sub(a.clavPos).normalize());
 
-    const hC = new V3().crossVectors(perp, nrm).normalize();
     const hum = bone["hum" + side], ulna = bone["ulna" + side];
     hum.position.copy(a.S);
-    frameQuat(a.aR, a.hR, a.E.clone().sub(a.S).normalize(), hC, hum.quaternion);
+    hum.quaternion.copy(k.hum);
+    a.E.copy(a.aR).multiplyScalar(a.upper).applyQuaternion(k.hum).add(a.S);
     ulna.position.copy(a.E);
-    frameQuat(fR, a.hR, T.clone().sub(a.E).normalize(), hC, ulna.quaternion);
-    bone["rad" + side].quaternion.setFromAxisAngle(a.pronAxis, tw);
+    ulna.quaternion.copy(k.hum).multiply(k.elbow);
+    qT.setFromAxisAngle(a.pronAxis, k.tw);
+    bone["rad" + side].quaternion.copy(qT);
+    bone["hand" + side].quaternion.copy(k.bend);
+    a.tw = k.tw;
+    a.handQ.copy(ulna.quaternion).multiply(qT).multiply(k.bend);
+    a.nW.copy(a.n0).applyQuaternion(a.handQ);
+    // where the palm is: wrist bend, then forearm rotation, then the forearm itself
+    a.T.copy(a.palmFromW).applyQuaternion(k.bend).add(a.wFromP0).applyQuaternion(qT).add(a.p0FromE).applyQuaternion(ulna.quaternion).add(a.E);
+
+    const c = k.curl.map((v) => v * D2R);
+    for (const d of DIGITS) {
+      const axis = a.flex[d - 1], angles = d === 1 ? [c[3], c[4]] : [c[0], c[1], c[2]];
+      segs(d).forEach((seg, i) => bone[`f${d}${seg}${side}`].quaternion.setFromAxisAngle(axis, angles[i]));
+    }
   }
 
   const setEuler = (b, e, k = 1) => b.rotation.set(e[0] * k * D2R, e[1] * k * D2R, e[2] * k * D2R);
@@ -428,6 +570,15 @@ export function createFigure(canvas, model, buffer, meta) {
     setSpeed(s) { speed = s; },
     setView,
     getView() { return { ...view }; },
+    /** forearm rotation (degrees) and palm position of one arm (for checks) */
+    armState(side) { const a = arms[side]; return { tw: (a.tw * a.sx) / D2R, palm: a.T.toArray(), elbow: a.E.toArray() }; },
+    /** point the camera at one hand (for checks): azimuth and elevation in degrees, distance in metres */
+    handCam(side, az, el, dist = 0.45) {
+      const t = arms[side].T;
+      controls.target.copy(t);
+      camera.position.set(Math.sin(az * D2R) * Math.cos(el * D2R), Math.sin(el * D2R), Math.cos(az * D2R) * Math.cos(el * D2R)).multiplyScalar(dist).add(t);
+      controls.update();
+    },
     setTheme(dark) {
       mats.prop.color.setHex(dark ? 0x4f5c68 : 0x8d99a5);
       mats.soft.color.setHex(dark ? 0x6b7a88 : 0x8d99a5);

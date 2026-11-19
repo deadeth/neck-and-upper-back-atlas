@@ -320,7 +320,7 @@ export const EXERCISE_INFO = {
   },
   "neck-flexion-stretch": {
     name: "Neck flexion stretch", type: "Stretch", kit: "Chair", dose: "3 times, 20 to 30 second hold",
-    steps: ["Sit tall and lace your fingers behind your head.", "Tuck your chin, then let your head roll forward.", "Let the weight of your arms add to the stretch.", "Uncurl back to upright."],
+    steps: ["Sit tall and put both hands behind your head, one over the other.", "Tuck your chin, then let your head roll forward.", "Let the weight of your arms add to the stretch.", "Uncurl back to upright."],
     feel: "A stretch down the back of the neck to between the shoulder blades.",
     ease: "Keep the upper back upright so the neck does the bending. Don't pull.",
   },
@@ -332,7 +332,7 @@ export const EXERCISE_INFO = {
   },
   "iso-extension": {
     name: "Isometric neck extension", type: "Strength", kit: "Chair", dose: "8 reps, 5 to 10 second hold, about half effort",
-    steps: ["Sit tall and lace your fingers behind your head.", "Press your head back into your hands. The hands stop it moving.", "Hold at about half effort, breathing normally.", "Release slowly."],
+    steps: ["Sit tall and put both hands behind your head, one over the other.", "Press your head back into your hands. The hands stop it moving.", "Hold at about half effort, breathing normally.", "Release slowly."],
     feel: "The muscles at the back of the neck working without the neck moving.",
     ease: "Keep the chin tucked a little so the head doesn't tip back. Pain-free effort only.",
   },
@@ -368,7 +368,7 @@ export const EXERCISE_INFO = {
   },
   "rhomboid-stretch": {
     name: "Rhomboid stretch", type: "Stretch", kit: "Chair", dose: "3 times, 20 second hold",
-    steps: ["Sit tall and clasp your hands in front at chest height.", "Reach forward and let your upper back round.", "Drop your chin and spread your shoulder blades apart.", "Uncurl back to upright."],
+    steps: ["Sit tall and press your palms together in front at chest height.", "Reach forward and let your upper back round.", "Drop your chin and spread your shoulder blades apart.", "Uncurl back to upright."],
     feel: "A spreading stretch between the shoulder blades.",
     ease: "Breathe into the space between the blades. The lower back stays upright.",
   },
@@ -392,13 +392,13 @@ export const EXERCISE_INFO = {
   },
   "thoracic-extension": {
     name: "Seated thoracic extension", type: "Mobility", kit: "Chair with a backrest", dose: "10 slow reps",
-    steps: ["Sit back in a chair so the top of the backrest sits just below your shoulder blades.", "Lace your fingers behind your head, elbows forward.", "Lean back over the backrest and open your chest to the ceiling.", "Come back to upright."],
+    steps: ["Sit back in a chair so the top of the backrest sits just below your shoulder blades.", "Put both hands behind your head, one over the other, elbows forward.", "Lean back over the backrest and open your chest to the ceiling.", "Come back to upright."],
     feel: "The upper back opening. A stretch across the chest.",
     ease: "The bend comes from the upper back. The hands carry the head so the neck doesn't crank.",
   },
   "prone-cobra": {
     name: "Prone cobra", type: "Strength", kit: "Mat", dose: "8 reps, 5 to 10 second hold",
-    steps: ["Lie face down with your arms by your sides, palms down, forehead on a folded towel.", "Draw your shoulder blades back and down.", "Lift your chest and hands a few centimetres, thumbs turning out, chin tucked, eyes on the floor.", "Lower slowly."],
+    steps: ["Lie face down with your arms by your sides, palms down, forehead on a folded towel.", "Draw your shoulder blades back and down.", "Lift your chest and hands a few centimetres, turning your thumbs up, chin tucked, eyes on the floor.", "Lower slowly."],
     feel: "The muscles either side of the upper spine and below the shoulder blades.",
     ease: "Keep it low. If the lower back takes over, squeeze your buttocks and lift less.",
   },
