@@ -1,0 +1,8 @@
+{
+  "name": "neck-and-upper-back-atlas",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node tools/check_content.mjs"
+  }
+}
