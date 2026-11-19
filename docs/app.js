@@ -309,6 +309,7 @@ async function boot() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+  $("stage-msg").innerHTML = "<div>Loading the 3D model…</div>";
   try {
     const res = await fetch("./model.json");
     if (!res.ok) throw new Error("model fetch failed");
@@ -318,6 +319,7 @@ async function boot() {
     anatomy = mods[1].createAnatomy(canvas, model, buffer, meta, $("ruler"));
     figure = mods[2].createFigure(canvas, model, buffer, meta);
     figure.setTheme(isDark());
+    $("stage-msg").innerHTML = "";
   } catch (e) {
     console.error(e);
     return fail("The 3D model couldn't load. The muscle notes and exercise steps in the panel still work.");
