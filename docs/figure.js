@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { geometry } from "./model.js";
 import { MOVES, BASES, SEAT } from "./moves.js";
+import { REAL } from "./timing.js";
 
 export const MOVE_IDS = MOVES;   // for checks
 const D2R = Math.PI / 180, CM = 0.01;
@@ -27,6 +28,7 @@ const DIGITS = [1, 2, 3, 4, 5];
 const segs = (d) => (d === 1 ? ["p", "d"] : ["p", "m", "d"]);
 for (const S of "LR") {
   PARENT["hand" + S] = "rad" + S;
+  PARENT["toes" + S] = "foot" + S;   // the toes hinge at the ball of the foot
   for (const d of DIGITS) {
     let prev = "hand" + S;
     for (const seg of segs(d)) { PARENT[`f${d}${seg}${S}`] = prev; prev = `f${d}${seg}${S}`; }
@@ -55,7 +57,7 @@ function expand(layer) {
   if (o.hipB) { o.hipL = o.hipL || o.hipB; o.hipR = o.hipR || o.hipB; delete o.hipB; }
   if (o.kneeB !== undefined) { o.kneeL = o.kneeL ?? o.kneeB; o.kneeR = o.kneeR ?? o.kneeB; delete o.kneeB; }
   if (o.ankB !== undefined) { o.ankL = o.ankL ?? o.ankB; o.ankR = o.ankR ?? o.ankB; delete o.ankB; }
-  if (o.legB) { o.legL = o.legL || o.legB; o.legR = o.legR || { ...o.legB, p: flipX(o.legB.p), pole: flipX(o.legB.pole) }; delete o.legB; }
+  if (o.legB) { o.legL = o.legL || o.legB; o.legR = o.legR || { ...o.legB, p: flipX(o.legB.p), pole: flipX(o.legB.pole), ball: flipX(o.legB.ball) }; delete o.legB; }
   return o;
 }
 const ease = (u, kind) => kind === "i" ? u * u : kind === "o" ? 1 - (1 - u) * (1 - u) : kind === "l" ? u : u * u * (3 - 2 * u);
@@ -187,6 +189,18 @@ export function createFigure(canvas, model, buffer, meta) {
   for (const S of "LR") {
     const th = rest["tib" + S].clone().sub(rest["fem" + S]), sh = rest["foot" + S].clone().sub(rest["tib" + S]);
     legs[S] = { thigh: th.length(), shin: sh.length(), thR: th.normalize(), shR: sh.normalize(), hinge: new V3(1, 0, 0) };
+    // toes: hinge axis along the ball of the foot, and the toe pads (points of the toes that touch the floor
+    // standing, at least 2 cm in front of the hinge), in the foot's frame with their heights above that floor
+    const toeAxis = new V3().fromArray(R["toeAxis" + S]).normalize(), toeFwd = new V3().crossVectors(new V3(0, 1, 0), toeAxis).normalize();
+    const pos = rigid["toes" + S][0].geometry.attributes.position, p = new V3(), pads = [];
+    let minY = Infinity;
+    for (let i = 0; i < pos.count; i++) minY = Math.min(minY, pos.getY(i));
+    const ball = rest["toes" + S], floorY = R.floor * CM;
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i);
+      if (p.y < minY + 0.004 && p.clone().sub(ball).dot(toeFwd) > 0.02) pads.push({ p: p.clone().sub(rest["foot" + S]), h: p.y - floorY });
+    }
+    Object.assign(legs[S], { toeAxis, toeFwd, ball: ball.clone().sub(rest["foot" + S]), ballH: ball.y - floorY, pads });
   }
   const frameOf = (spec, side) => (spec.f === "thigh" ? bone["fem" + side] : frames[spec.f]);
   const frameJoint = (spec, side) => (spec.f === "thigh" ? "fem" + side : { chest: "thorax", head: "head", neck: "c7", pelvis: "pelvis", thighL: "femL", thighR: "femR" }[spec.f]);
@@ -288,7 +302,8 @@ export function createFigure(canvas, model, buffer, meta) {
   };
 
   // ---------- player ----------
-  let move = null, poses = [], time = 0, playing = true, speed = 1, autoView = null, glowT = 0;
+  let move = null, poses = [], time = 0, playing = true, speed = 1, autoView = null, glowT = 0, ground = 0;
+  let real = false, rt = 0, plan = null;   // real-time playback: seconds into the real loop, and its phase timings
   const view = { frame: "whole", angle: "best" };
   const targetMats = [];
 
@@ -333,9 +348,12 @@ export function createFigure(canvas, model, buffer, meta) {
     const base = { ...ZERO, ...expand(BASES[move.base]), ...expand(move.rest || {}) };
     poses = move.keys.map((k) => ({ ...base, ...expand(k) }));
     time = 0;
+    plan = planFor(id);
+    rt = 0;
     dyn.length = 0;
     for (const c of [...props.children]) props.remove(c);
     for (const p of move.props) BUILD[p]();
+    ground = move.props.includes("mat") ? 0.012 : 0;   // what the feet stand on: the floor or the mat's top
     paint(targets);
     const lying = move.base === "prone" || move.base === "supine";
     // targets sit below the figure's middle so the controls along the bottom of the stage don't cover the feet
@@ -529,6 +547,36 @@ export function createFigure(canvas, model, buffer, meta) {
   }
 
   const setEuler = (b, e, k = 1) => b.rotation.set(e[0] * k * D2R, e[1] * k * D2R, e[2] * k * D2R);
+  const smooth = (x, a, b) => THREE.MathUtils.smoothstep(x, a, b);
+  /**
+   * Toe extension (degrees) that brings the toe pads back down onto the ground and no further, for a foot
+   * pitched heel up with the ball on or near the ground. It fades to 0 for a flat foot, a foot in the air
+   * or a sole that doesn't face down, so there the toes stay as scanned.
+   */
+  const qF = new THREE.Quaternion(), J = new V3(), ax = new V3(), r = new V3(), perp = new V3(), w = new V3();
+  function autoToes(side) {
+    const g = legs[side], foot = bone["foot" + side], m = foot.matrixWorld;
+    foot.getWorldQuaternion(qF);
+    J.copy(g.ball).applyMatrix4(m);
+    ax.copy(g.toeAxis).applyQuaternion(qF);
+    let e = -Infinity;
+    for (const pad of g.pads) {
+      // a pad's height after turning t about the axis is J.y + par.y + perp.y cos t + w.y sin t
+      r.copy(pad.p).applyMatrix4(m).sub(J);
+      const par = ax.y * ax.dot(r);
+      perp.copy(r).addScaledVector(ax, -ax.dot(r));
+      w.crossVectors(ax, perp);
+      const c = THREE.MathUtils.clamp((ground + pad.h - J.y - par) / Math.max(Math.hypot(perp.y, w.y), 1e-6), -1, 1);
+      let t = (Math.atan2(w.y, perp.y) - Math.acos(c)) / D2R;   // the root where turning further lifts the pad
+      while (t < -120) t += 360;
+      while (t >= 240) t -= 360;
+      e = Math.max(e, t);   // the pad that needs the most lift decides
+    }
+    const pitch = Math.asin(THREE.MathUtils.clamp(-r.copy(g.toeFwd).applyQuaternion(qF).y, -1, 1)) / D2R;
+    const soleDown = r.set(0, 1, 0).applyQuaternion(qF).y;
+    const k = smooth(pitch, 0, 2) * smooth(soleDown, 0.05, 0.25) * (1 - smooth(J.y - ground - g.ballH, 0.015, 0.04));
+    return THREE.MathUtils.clamp(e, 0, 70) * k;
+  }
   function pose(f) {
     let i = 0;
     while (i < move.keys.length - 2 && f >= move.keys[i + 1].t) i++;
@@ -558,7 +606,13 @@ export function createFigure(canvas, model, buffer, meta) {
       // feet planted: ankle target in the room, knee pointing along `pole`, foot pitched by `foot` degrees
       const g = legs[side], fem = bone["fem" + side], tib = bone["tib" + side];
       const hipW = fem.getWorldPosition(new V3());
-      const ankle = new V3().fromArray(lerpArr(LA.p, LB.p, u)), pole = new V3().fromArray(lerpArr(LA.pole, LB.pole, u)).normalize();
+      // on the ball of the foot (`ball` in both keys): `ball` is where the toe joint goes and `foot` turns the
+      // foot heel up about the line through the ball, so the ball stays put whatever the pitch; the ankle follows
+      const fA = LA.foot || 0, fB = LB.foot || 0, onBall = LA.ball && LB.ball;
+      const ballQ = onBall && new THREE.Quaternion().setFromAxisAngle(g.toeAxis, -(fA + (fB - fA) * u) * D2R);
+      const ankle = onBall ? g.ball.clone().negate().applyQuaternion(ballQ).add(new V3().fromArray(lerpArr(LA.ball, LB.ball, u)))
+        : new V3().fromArray(lerpArr(LA.p, LB.p, u));
+      const pole = new V3().fromArray(lerpArr(LA.pole, LB.pole, u)).normalize();
       const sol = ik(hipW, ankle, g.thigh, g.shin, pole);
       const pelQ = bone.pelvis.getWorldQuaternion(new THREE.Quaternion());
       const femQ = frameQuat(g.thR, g.hinge, sol.E.clone().sub(hipW).normalize(), sol.hinge, new THREE.Quaternion());
@@ -566,10 +620,17 @@ export function createFigure(canvas, model, buffer, meta) {
       fem.quaternion.copy(pelQ).invert().multiply(femQ);
       tib.quaternion.copy(femQ).invert().multiply(tibQ);
       // foot: degrees of pitch, or [x, y, z] Euler degrees (XYZ) for a foot turned out of the sagittal plane
-      const fA = LA.foot || 0, fB = LB.foot || 0;
-      const footQ = Array.isArray(fA) ? new THREE.Quaternion().setFromEuler(new THREE.Euler(...lerpArr(fA, fB, u).map((v) => v * D2R)))
+      const footQ = onBall ? ballQ : Array.isArray(fA) ? new THREE.Quaternion().setFromEuler(new THREE.Euler(...lerpArr(fA, fB, u).map((v) => v * D2R)))
         : new THREE.Quaternion().setFromAxisAngle(new V3(1, 0, 0), (fA + (fB - fA) * u) * D2R);
       bone["foot" + side].quaternion.copy(tibQ).invert().multiply(footQ);
+    }
+    scene.updateMatrixWorld(true);
+    // toes: degrees of extension from the leg spec, or else whatever lays them on the ground
+    for (const side of "LR") {
+      const LA = A["leg" + side], LB = B["leg" + side], set = (L) => L && L.toes !== undefined;
+      const auto = set(LA) && set(LB) ? 0 : autoToes(side);
+      const tA = set(LA) ? LA.toes : auto, tB = set(LB) ? LB.toes : auto;
+      bone["toes" + side].quaternion.setFromAxisAngle(legs[side].toeAxis, (tA + (tB - tA) * u) * D2R);
     }
     scene.updateMatrixWorld(true);
     solveArm("L", A.aL, B.aL, u, P.shL);
@@ -583,23 +644,72 @@ export function createFigure(canvas, model, buffer, meta) {
     return cur;
   }
 
+  // Real time maps wall-clock seconds onto the same loop fraction the keys and phases use: each phase keeps
+  // its span of the loop but lasts its real length (REAL in timing.js), so poses are exactly those of the
+  // animated loop, only paced differently.
+  function planFor(id) {
+    const r = REAL[id] || {}, ph = move.phases;
+    let hold = ph.findIndex((p) => p.w && p.label);
+    if (hold < 0) hold = ph.findIndex((p) => p.w);
+    const at = ph.map((p) => p.at).concat(1), len = [], start = [];
+    let total = 0;
+    for (let i = 0; i < ph.length; i++) {
+      const own = (at[i + 1] - at[i]) * move.dur;
+      len.push(i === hold && r.hold ? r.hold : (r.tempo && r.tempo[i]) || own);
+      start.push(total);
+      total += len[i];
+    }
+    return { at, len, start, total, hold: r.hold ? hold : -1 };
+  }
+  /** real seconds into the loop -> loop fraction */
+  function realToF(s) {
+    const { at, len, start } = plan;
+    let i = 0;
+    while (i < len.length - 1 && s >= start[i + 1]) i++;
+    return at[i] + (len[i] ? Math.min(1, (s - start[i]) / len[i]) : 0) * (at[i + 1] - at[i]);
+  }
+  /** loop fraction -> real seconds into the loop */
+  function fToReal(f) {
+    const { at, len, start } = plan;
+    let i = 0;
+    while (i < len.length - 1 && f >= at[i + 1]) i++;
+    const span = at[i + 1] - at[i];
+    return start[i] + (span ? (f - at[i]) / span : 0) * len[i];
+  }
+
   return {
     scene, camera, controls, load, addMuscles,
     resize(width, height) { camera.aspect = width / height; camera.updateProjectionMatrix(); },
-    /** advance the animation; returns { step, label, working } for the instructions */
+    /** advance the animation; returns { step, label, working, f, hold } for the instructions.
+     *  hold is { left, total } in seconds while a timed hold runs in real time, otherwise null */
     update(dt) {
       controls.update();
       if (!move) return null;
-      if (playing) time = (time + dt * speed) % move.dur;
+      if (playing && real) { rt = (rt + dt) % plan.total; time = realToF(rt) * move.dur; }
+      else if (playing) time = (time + dt * speed) % move.dur;
       const f = time / move.dur;
       pose(f);
       const ph = phaseAt(f);
       glowT += dt;
       const glow = ph.w ? 0.3 + 0.22 * Math.sin(glowT * 3.2) : 0.1;
       for (const mat of targetMats) mat.emissive.copy(mat.color).multiplyScalar(glow);
-      return { step: ph.step, label: ph.label || "", working: !!ph.w, f };
+      let hold = null;
+      if (real && plan.hold >= 0) {
+        const i = plan.hold, left = plan.start[i] + plan.len[i] - rt;
+        if (rt >= plan.start[i] && left > 0) hold = { left, total: plan.len[i] };
+      }
+      return { step: ph.step, label: ph.label || "", working: !!ph.w, f, hold };
     },
-    seek(f) { if (move) time = f * move.dur; },
+    seek(f) { if (move) { time = f * move.dur; rt = fToReal(f); } },
+    /** play at the pace you would do the exercise: holds last their stated time, Speed is ignored */
+    setRealTime(on) {
+      on = !!on;
+      if (on && !real && move) rt = fToReal(time / move.dur);   // carry on from the same pose
+      real = on;
+    },
+    isRealTime() { return real; },
+    /** the real-time loop: phase lengths and total in seconds (for checks) */
+    realPlan() { return plan && { len: [...plan.len], start: [...plan.start], total: plan.total, hold: plan.hold }; },
     setPlaying(p) { playing = p; },
     isPlaying() { return playing; },
     setSpeed(s) { speed = s; },

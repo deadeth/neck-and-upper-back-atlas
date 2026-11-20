@@ -3,12 +3,15 @@
 import fs from "node:fs";
 import { REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "../docs/content.js";
 import { MOVES, BASES } from "../docs/moves.js";
+import { REAL } from "../docs/timing.js";
 
 const read = (f) => JSON.parse(fs.readFileSync(new URL(`../docs/${f}`, import.meta.url)));
 const errs = [];
 const ok = (cond, msg) => { if (!cond) errs.push(msg); };
 const regionIds = new Set(REGIONS.map((r) => r.id));
 const ready = new Set(REGIONS.filter((r) => r.ready).map((r) => r.id));
+// ready regions whose stretches are written; `stretches: false` means pain notes only, lifts stand in (contract, Addendum 2)
+const stretched = new Set(REGIONS.filter((r) => r.ready && r.stretches !== false).map((r) => r.id));
 const groupIds = new Set(GROUPS.map((g) => g.id));
 const muscleIds = new Set(MUSCLES.map((m) => m.id));
 const byMuscle = Object.fromEntries(MUSCLES.map((m) => [m.id, m]));
@@ -19,6 +22,12 @@ const parts = [];   // { id, side, region }
 for (const r of REGIONS) {
   ok(r.name && typeof r.ready === "boolean", `region ${r.id}: needs name and ready`);
   ok(r.flags === null || (Array.isArray(r.flags) && r.flags.length >= 3), `region ${r.id}: flags must be null or a list of at least 3`);
+  ok(r.stretches === undefined || typeof r.stretches === "boolean", `region ${r.id}: stretches must be true or false`);
+  if (r.ready) {
+    // null falls back to RED_FLAGS, which is written for the neck; every other ready region needs its own list
+    ok(Array.isArray(r.flags) || (r.flags === null && r.id === "neck"), `region ${r.id}: ready, so it needs its own flags`);
+    for (const kind of ["where", "when"]) ok(PATTERNS.some((p) => p.region === r.id && p.kind === kind), `region ${r.id}: ready, so it needs at least one "${kind}" pattern`);
+  }
   let doc = null;
   try { doc = read(`muscles-${r.id}.json`); } catch (e) { errs.push(`region ${r.id}: docs/muscles-${r.id}.json missing or unreadable`); continue; }
   for (const p of doc.parts) {
@@ -51,9 +60,10 @@ for (const m of MUSCLES) {
     ok(EXERCISE_INFO[e], `${m.id}: exercise ${e} has no notes`);
     ok(!EXERCISE_INFO[e] || EXERCISE_INFO[e].mode !== "strength", `${m.id}: ${e} is a strength lift; lifts list their muscles in targets, not the other way round`);
   }
-  // regions without pain notes yet may have no exercises; ready ones need the full set
+  // regions without pain notes yet may have no exercises; ready ones need the notes, and exercises unless
+  // the region is marked `stretches: false`
   if (ready.has(m.region)) {
-    ok(m.exercises.length >= 2, `${m.id}: fewer than 2 exercises`);
+    if (stretched.has(m.region)) ok(m.exercises.length >= 2, `${m.id}: fewer than 2 exercises`);
     for (const k of ["pain", "triggers", "check"]) ok(m[k] && m[k].length > 3, `${m.id}: missing ${k}`);
   }
 }
@@ -114,6 +124,26 @@ for (const [id, e] of Object.entries(EXERCISE_INFO)) {
   ok(mv.phases.some((p) => p.w), `${id}: no working phase`);
 }
 for (const id of Object.keys(MOVES)) ok(EXERCISE_INFO[id], `animation ${id} has no notes`);
+// real-time playback: every animation has timings, and every timing belongs to an exercise
+for (const id of Object.keys(MOVES)) ok(REAL[id], `animation ${id} has no real-time entry in site/timing.js`);
+for (const id of Object.keys(REAL)) ok(EXERCISE_INFO[id] && MOVES[id], `site/timing.js: ${id} is not an animated exercise`);
+
+// ---- search aliases (optional on every entry) ----
+const aliased = [
+  ...MUSCLES.map((x) => ["muscle " + x.id, x]), ...GROUPS.map((x) => ["group " + x.id, x]), ...PATTERNS.map((x) => ["pattern " + x.id, x]),
+  ...REGIONS.map((x) => ["region " + x.id, x]), ...STRENGTH.map((x) => ["day " + x.id, x]), ...Object.entries(EXERCISE_INFO).map(([id, x]) => ["exercise " + id, x]),
+];
+for (const [label, x] of aliased) {
+  if (x.aliases === undefined) continue;
+  if (!Array.isArray(x.aliases)) { errs.push(`${label}: aliases must be a list`); continue; }
+  const own = [x.name, x.latin].filter(Boolean).map((s) => s.toLowerCase().trim());
+  for (const a of x.aliases) {
+    if (typeof a !== "string" || !a.trim()) { errs.push(`${label}: empty alias`); continue; }
+    ok(a === a.trim() && /^[\p{Ll}\p{N}]+(?:[ -][\p{Ll}\p{N}]+)*$/u.test(a), `${label}: alias "${a}" must be lower case, words joined by single spaces or hyphens`);
+    ok(!own.includes(a), `${label}: alias "${a}" repeats its own name or latin`);
+  }
+  ok(new Set(x.aliases).size === x.aliases.length, `${label}: an alias is listed twice`);
+}
 
 // ---- copy ----
 ok(RED_FLAGS.length >= 5, "red flags list too short");

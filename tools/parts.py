@@ -50,6 +50,8 @@ CARPUS = ["capitate", "hamate", "lunate", "pisiform", "scaphoid", "trapezium", "
 METACARPALS = ["first", "second", "third", "fourth", "fifth"]
 DIGITS = ["thumb", "index finger", "middle finger", "ring finger", "little finger"]   # digit 1..5
 FOOT_RE = r"^(?=.*\b{s}\b).*(calcaneus|cuboid|cuneiform|talus|metatarsal|toe|navicular|sesamoid)"
+TOES_RE = r"phalanx of {s} \w+ toe$"   # the part of FOOT_RE that bends at the ball of the foot
+TOE_RAYS = ["first", "second", "third", "fourth", "fifth"]   # metatarsals, big toe to little toe
 
 MUSCLE_KEEP = 0.72      # fraction of triangles kept per muscle mesh
 CUT_Z = 1012.0          # mm: atlas parts are clipped below this height (just under L1)
@@ -121,3 +123,10 @@ REGION_UNITS = {
 # extra sources that only contribute their part below the neck atlas's cut (the lumbar half of the long back extensors)
 BELOW_CUT = {"lumbar-erectors": ["{s} longissimus thoracis", "{s} spinalis thoracis"]}
 REGION_KEEP = 0.5
+# The scanned flat abdominal muscles carry their aponeuroses, which form the rectus sheath and cover the
+# rectus abdominis. Cut each away medial to the rectus's lateral border (the linea semilunaris), measured
+# height by height from the same side's rectus mesh; only the front of the trunk (source y below
+# SHEATH_FRONT_Y, mm) is cut, so the posterior attachments stay.
+SHEATH_UNITS = ("external-oblique", "internal-oblique", "transversus-abdominis")
+SHEATH_BORDER = "{s} rectus abdominis"
+SHEATH_FRONT_Y = -110.0

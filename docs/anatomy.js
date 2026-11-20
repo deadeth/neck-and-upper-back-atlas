@@ -12,7 +12,7 @@ const BONE = 0xe7dec9;
 const BONE_NAMES = {
   skull: "Skull", cervical: "Cervical spine (C1 to C7)", thoracic: "Thoracic spine (T1 to T12)", lumbar: "L1 vertebra",
   ribs: "Ribs", sternum: "Breastbone", scapula: "Shoulder blade", clavicle: "Collarbone", humerus: "Upper arm bone",
-  lumbar: "Lumbar spine (L1 to L5)", pelvis: "Pelvis", forearm: "Forearm bones", hand: "Hand", femur: "Thigh bone", shin: "Shin bones", foot: "Foot",
+  lumbar: "Lumbar spine (L1 to L5)", pelvis: "Pelvis", forearm: "Forearm bones", hand: "Hand", femur: "Thigh bone", shin: "Shin bones", foot: "Foot", toes: "Toes",
 };
 const VIEW_DIR = {
   back: [0, 0.12, -1], front: [0, 0.1, 1], left: [1, 0.08, -0.18], right: [-1, 0.08, -0.18],

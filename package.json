@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node tools/check_content.mjs"
+    "check": "node tools/check_content.mjs && node tools/test_search.mjs"
   }
 }

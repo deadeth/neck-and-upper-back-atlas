@@ -13,9 +13,11 @@ Every exercise and lift plays on a full skeleton, with the worked muscles highli
 ## What's in it
 
 - A real-anatomy skeleton with 59 muscles in five regions, left and right.
-- Neck and upper back, and lower back and core, written in full: pain finder, muscle notes with quick checks, and 30 animated stretches and control exercises.
-- Shoulders, chest and arms, hips and glutes, and legs and feet: clickable anatomy with what each muscle does, its attachments and nerve supply. Their pain notes and stretches are still to come.
+- A pain finder for every region: pick where it hurts or what sets it off (56 patterns in all), and the likely muscles light up in ranked order. Every muscle has notes on how it tends to hurt, what sets it off and a quick check, and every region lists its warning signs.
+- Neck and upper back, and lower back and core, also have 30 animated stretches and control exercises. Stretches for shoulders, hips and legs are still to come; until then those muscles list the lifts that train them.
 - Three strength days with 16 lifts, 13 of them new animations.
+- Search across muscles, exercises, lifts, pain patterns, regions and days, with everyday names and gym slang ("traps", "six pack", "rdl", "sciatica").
+- A Real time switch on the exercise player: holds last as long as the instruction says, with a countdown, so you can follow along.
 
 This is a guide to muscular sources of pain. It isn't medical advice and it can't examine you. Joints, discs and nerves cause pain too, and each finished region lists the symptoms that mean seeing a GP or physio first, or calling 999.
 
@@ -31,6 +33,8 @@ The site is static and lives in `docs/`. There's no build step for the page.
 | `docs/figure.js` | The exercise skeleton: joints, arm and leg IK, skinned muscles, props |
 | `docs/moves.js`, `moves-core.js`, `moves-strength.js` | Keyframes for each exercise and lift |
 | `docs/content.js`, `content-body.js` | Regions, muscle notes, pain patterns, exercise instructions, strength days |
+| `docs/search.js` | Search matching and ranking (pure functions) |
+| `docs/timing.js` | Real-time hold and tempo for each animation |
 | `docs/model.js` | Unpacks the model files into geometry |
 | `docs/model.json` | Bones, joint centres and the rig |
 | `docs/muscles-<region>.json` | One region's muscles and skin weights, loaded when first needed |
@@ -43,7 +47,7 @@ To run it locally, serve `docs/` with any static server:
 python3 -m http.server --directory docs 8000
 ```
 
-`npm run check` verifies that every region, muscle, pain pattern, exercise note, strength day and animation resolves.
+`npm run check` verifies that every region, muscle, pain pattern, exercise note, strength day, alias, timing entry and animation resolves, then runs the search tests.
 
 ### Rebuilding the model
 

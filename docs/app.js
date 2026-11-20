@@ -3,6 +3,7 @@
 // The panel renders from content.js alone, so it still works if WebGL or a download fails.
 import { REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "./content.js";
 import { STRENGTH_NOTE } from "./content-body.js";
+import { buildIndex, search, KIND_LABEL } from "./search.js";
 
 const $ = (id) => document.getElementById(id);
 const panel = $("panel"), stage = $("stage"), canvas = $("gl");
@@ -83,7 +84,10 @@ function go(view, id, extra = {}) {
   render();
 }
 function back() {
+  // an entry opened from search in the other mode carries `ret`: Back pops it and returns to that mode
+  const ret = cur().ret;
   if (nav().length > 1) nav().pop();
+  if (ret) setMode(ret, false);
   render();
 }
 function home() {
@@ -118,12 +122,15 @@ const exCard = (id, pill) => {
 const exList = (ids) => `<ul class="stack">${ids.map((id) => exCard(id)).join("")}</ul>`;
 const liftList = (lifts) => `<ul class="stack">${lifts.map((l) => exCard(l.id, l.helper ? "Helper" : null)).join("")}</ul>`;
 const NOT_READY = `<p class="note">Pain notes and stretches for this region are still being written.</p>`;
+const NO_STRETCHES = `<p class="note">Stretches for this region are still being made. Until then, each muscle lists the lifts that train it.</p>`;
+const noStretches = (r) => r.ready && r.stretches === false;
 const facts = (m) => `<dl class="facts"><dt>Attaches</dt><dd>${esc(m.attach)}</dd><dt>Nerve</dt><dd>${esc(m.nerve)}</dd></dl>`;
 
 function backLabel() {
-  const prev = nav()[nav().length - 2];
+  const ret = cur().ret;
+  const prev = ret ? navs[ret][navs[ret].length - 1] : nav()[nav().length - 2];
   if (!prev) return "Back";
-  if (prev.view === "home") return mode === "pain" ? R[prev.region].name : "Strength days";
+  if (prev.view === "home") return (ret || mode) === "pain" ? R[prev.region].name : "Strength days";
   if (prev.view === "muscle") return M[prev.id].name;
   if (prev.view === "group") return Gp[prev.id].name;
   if (prev.view === "pattern") return Pt[prev.id].name;
@@ -152,9 +159,12 @@ function viewPainHome(r) {
   const finder = ["where", "when"].map((k) => chips(k) && sec(k === "where" ? "Where it hurts" : "When it hurts", `<div class="chips">${chips(k)}</div>`)).join("");
   const groups = GROUPS.filter((g) => g.region === r.id).map(groupBlock).join("");
   return `<div class="pad">
+    ${nav().length > 1 ? backBtn(backLabel()) : ""}
     ${regionPicker(r.id)}
     <div class="head"><span class="eyebrow">Pain and stretch</span><h2 class="title">${esc(r.name)}</h2></div>
-    ${r.ready
+    ${noStretches(r)
+      ? `<p class="lede">Click a muscle on the model, or start from the pain. Each muscle comes with a quick check.</p>${NO_STRETCHES}`
+      : r.ready
       ? `<p class="lede">Click a muscle on the model, or start from the pain. Each muscle comes with a quick check and exercises you can watch in 3D.</p>`
       : NOT_READY}
     ${r.ready ? finder : ""}
@@ -255,7 +265,7 @@ function viewMuscle(m) {
     ${sec("What sets it off", `<p>${esc(m.triggers)}</p>`)}
     ${sec("Quick check", `<p>${esc(m.check)}</p>`)}
     ${m.exercises.length ? sec("Exercises", exList(m.exercises)) : ""}
-    ${lifts.length ? sec("Strength lifts that train it", liftList(lifts)) : ""}
+    ${lifts.length || noStretches(R[m.region]) ? liftSec : ""}
     ${does}
     ${facts(m)}
   </div>`;
@@ -317,6 +327,29 @@ const ensure = (list) => Promise.all(list.map(loadRegion));
 let scene = "anatomy", lastStep = -1, lastLabel = null, syncToken = 0;
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// Real time: holds last their stated time so you can follow along. Remembered between exercises and visits;
+// storage can throw (private browsing, blocked cookies), so it is optional.
+const REAL_KEY = "atlas.realTime";
+let realTime = false, lastLeft = null;
+try { realTime = localStorage.getItem(REAL_KEY) === "1"; } catch (e) { /* not remembered */ }
+function applyRealTime() {
+  if (figure) figure.setRealTime(realTime);
+  for (const b of document.querySelectorAll('[data-act="real"]')) b.setAttribute("aria-pressed", String(realTime));
+  for (const b of $("tools-figure").querySelectorAll("[data-speed]")) b.disabled = realTime;   // speed is for the demonstration only
+  if (!realTime) showHold(null);
+}
+/** the hold countdown: whole seconds left, and a bar that shrinks over the hold. Short pauses go without. */
+function showHold(h) {
+  const n = h && h.total >= 3 ? Math.ceil(h.left) : null;
+  if (n !== lastLeft) {
+    lastLeft = n;
+    for (const el of [$("cap-count"), $("head-count")]) { el.hidden = n === null; el.querySelector(".count-n").textContent = n === null ? "" : n; }
+    $("caption").classList.toggle("holding", n !== null);
+    $("caption").querySelector(".count-bar").hidden = n === null;
+  }
+  if (n !== null && !reduced) for (const bar of document.querySelectorAll(".count-bar i")) bar.style.transform = `scaleX(${(h.left / h.total).toFixed(4)})`;
+}
+
 function setPressed(container, attr, value) {
   if (!container) return;
   for (const b of container.querySelectorAll(`[data-${attr}]`)) b.setAttribute("aria-pressed", String(b.dataset[attr] === String(value)));
@@ -377,6 +410,8 @@ function setScene(next) {
   anatomy.invalidate();
   figure.controls.enabled = scene === "figure";
   if (scene === "anatomy") $("phase").textContent = "";
+  if (scene !== "figure") showHold(null);
+  $("btn-real-head").parentElement.hidden = scene !== "figure";   // the phone's copy of the toggle sits outside the tools
 }
 
 /** tell the atlas how much of the canvas the title and the controls cover, so framing keeps clear of them */
@@ -474,7 +509,100 @@ function updateSteps(info) {
     $("cap-t").textContent = e.steps[info.step];
   }
   if (info.label !== lastLabel) { lastLabel = info.label; $("phase").textContent = info.label; }
+  showHold(info.hold);
 }
+
+// ---------- search ----------
+const INDEX = buildIndex({ REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO });
+const SEARCH_CAP = 8;
+const sBox = $("search"), sInput = $("search-input"), sPop = $("search-pop"), sList = $("search-list"), sNone = $("search-none"), sClear = $("search-clear");
+let hits = [], hitActive = -1, hitAll = false;
+
+/** the region an exercise belongs to: that of the first muscle it works */
+function exRegion(id) {
+  const m = worksOn(id).main.find((x) => M[x]);
+  return m ? M[m].region : cur().region;
+}
+/**
+ * Open a search result on top of where you are, so Back returns there. Pain patterns and regions open in
+ * pain mode, lifts and days in strength mode, everything else in the current mode. A jump to the other mode
+ * marks the new entry with `ret`, and Back from it comes home to the mode you searched from.
+ */
+function openResult(kind, id) {
+  const from = mode;
+  const want = kind === "pattern" || kind === "region" ? "pain" : kind === "lift" || kind === "day" ? "strength" : mode;
+  if (want !== mode) setMode(want, false);
+  const view = kind === "lift" ? "exercise" : kind === "region" ? "home" : kind;
+  const region = kind === "region" ? id : view === "exercise" ? exRegion(id) : regionFor(view, id);
+  const top = cur();
+  const same = top.view === view && (view === "home" ? top.region === region : top.id === id);
+  if (!same) nav().push({ view, ...(view === "home" ? {} : { id }), region, ...(want !== from ? { ret: from } : {}) });
+  render();
+}
+
+function fitSearch() {
+  // keep the list above an on-screen keyboard: the visual viewport shrinks when one opens
+  const vv = window.visualViewport;
+  const bottom = vv ? vv.offsetTop + vv.height : innerHeight;
+  const room = bottom - sPop.getBoundingClientRect().top - 10;
+  sPop.style.setProperty("--search-max", Math.round(Math.max(140, Math.min(560, room))) + "px");
+}
+function setActive(i) {
+  const opts = sList.children;
+  hitActive = opts.length ? (i + opts.length) % opts.length : -1;
+  [...opts].forEach((o, k) => o.setAttribute("aria-selected", String(k === hitActive)));
+  if (hitActive >= 0) { sInput.setAttribute("aria-activedescendant", opts[hitActive].id); opts[hitActive].scrollIntoView({ block: "nearest" }); }
+  else sInput.removeAttribute("aria-activedescendant");
+}
+function renderSearch(keep = -1) {
+  const q = sInput.value;
+  sBox.classList.toggle("has-value", q.length > 0);
+  sClear.hidden = !q;
+  hits = q.trim() ? search(INDEX, q) : [];
+  const list = hitAll ? hits : hits.slice(0, SEARCH_CAP);
+  const sub = (h) => [h.entry.sub && esc(h.entry.sub), h.matched && `matches: <i>${esc(h.matched)}</i>`].filter(Boolean).join(" · ");
+  sList.innerHTML = list.map((h, i) => `<li role="option" class="hit" id="hit-${i}" data-hit="${i}" aria-selected="false"><span><span class="n">${esc(h.entry.name)}</span>${sub(h) ? `<span class="d">${sub(h)}</span>` : ""}</span><span class="pill">${KIND_LABEL[h.entry.kind]}</span></li>`).join("")
+    + (hits.length > list.length ? `<li role="option" class="hit more" id="hit-more" data-more="1" aria-selected="false">Show all ${hits.length} results</li>` : "");
+  const open = !!q.trim() && document.activeElement === sInput;
+  sPop.hidden = !open;
+  sList.hidden = !hits.length;
+  sNone.hidden = !!hits.length;
+  sInput.setAttribute("aria-expanded", String(open && hits.length > 0));
+  setActive(hits.length ? Math.max(0, Math.min(keep, sList.children.length - 1)) : -1);
+  if (open) fitSearch();
+}
+function chooseHit(i) {
+  const li = sList.children[i];
+  if (!li) return;
+  if (li.dataset.more) { hitAll = true; return renderSearch(i); }
+  const h = hits[Number(li.dataset.hit)];
+  sInput.value = ""; hitAll = false;
+  sInput.blur();   // closes the list and, on a phone, the keyboard
+  renderSearch();
+  openResult(h.entry.kind, h.entry.id);
+}
+sInput.addEventListener("input", () => { hitAll = false; renderSearch(0); });
+sInput.addEventListener("focus", () => renderSearch(0));
+sInput.addEventListener("blur", () => { sPop.hidden = true; sInput.setAttribute("aria-expanded", "false"); });
+sInput.addEventListener("keydown", (ev) => {
+  if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+    ev.preventDefault();
+    if (sPop.hidden) return renderSearch(0);
+    return setActive(hitActive + (ev.key === "ArrowDown" ? 1 : -1));
+  }
+  if (ev.key === "Enter") { ev.preventDefault(); if (hitActive >= 0) chooseHit(hitActive); return; }
+  if (ev.key === "Escape") {
+    ev.stopPropagation();   // not the page's Escape, which goes back
+    if (sInput.value) { sInput.value = ""; hitAll = false; renderSearch(); } else sInput.blur();
+  }
+});
+// keep focus in the field while a result or the clear button is pressed
+sPop.addEventListener("pointerdown", (ev) => ev.preventDefault());
+sClear.addEventListener("pointerdown", (ev) => ev.preventDefault());
+sPop.addEventListener("click", (ev) => { const li = ev.target.closest("[role=option]"); if (li) chooseHit([...sList.children].indexOf(li)); });
+sClear.addEventListener("click", () => { sInput.value = ""; hitAll = false; sInput.focus(); renderSearch(); });
+if (window.visualViewport) for (const t of ["resize", "scroll"]) visualViewport.addEventListener(t, () => { if (!sPop.hidden) fitSearch(); });
+const typing = (el) => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
 // ---------- events ----------
 document.addEventListener("click", (ev) => {
@@ -498,12 +626,18 @@ document.addEventListener("click", (ev) => {
     return render();
   }
   if (d.act === "play" && figure) { figure.setPlaying(!figure.isPlaying()); return updatePlayBtn(); }
+  if (d.act === "real" && figure) {
+    realTime = !realTime;
+    try { localStorage.setItem(REAL_KEY, realTime ? "1" : "0"); } catch (e) { /* not remembered */ }
+    return applyRealTime();
+  }
   if (d.speed && figure) { figure.setSpeed(Number(d.speed)); return setPressed($("tools-figure"), "speed", d.speed); }
   if ((d.fframe || d.fangle) && figure) { figure.setView(d.fframe, d.fangle); return syncViewButtons(); }
   if (d.view && anatomy) { anatomy.setView(d.view); return setPressed($("tools-anatomy"), "view", d.view); }
   if (d.depth && anatomy) { anatomy.setDepth(Number(d.depth)); return setPressed($("tools-anatomy"), "depth", d.depth); }
 });
 document.addEventListener("keydown", (ev) => {
+  if (ev.key === "/" && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !typing(ev.target)) { ev.preventDefault(); sInput.focus(); sInput.select(); return; }
   if (ev.key === "Escape" && nav().length > 1) back();
 });
 
@@ -586,6 +720,7 @@ async function boot() {
     figure = mods[2].createFigure(canvas, model, buffer, meta);
     MOVES = mods[2].MOVE_IDS;
     figure.setTheme(isDark());
+    applyRealTime();
   } catch (e) {
     console.error(e);
     return fail("The 3D model couldn't load. The muscle notes and exercise steps in the panel still work.");
@@ -634,7 +769,8 @@ async function boot() {
     go, home, render, anatomy, figure, moves: MOVES, idle,
     get nav() { return nav(); },
     get mode() { return mode; },
-    setMode, setRegion,
+    get navs() { return navs; },
+    setMode, setRegion, openResult,
     /** draw one exercise at a point in its loop and return the frame as a data URL */
     async snap(id, f, view) {
       await openExercise(id);

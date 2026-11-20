@@ -48,9 +48,9 @@ const SUPINE_ARM = { f: "chest", p: [0.27, -0.3, -0.066], n: [0, 0, -1], g: [0, 
 
 export const BASES = {
   stand: { root: { p: [0, 0.882, 0], r: [0, 0, 0] }, aB: HANG },
-  sit: { root: { p: [0, SEAT + 0.06, 0], r: [0, 0, 0] }, hipB: [90, 5], kneeB: 90, aB: LAP },
-  prone: { root: { p: [0, 0.14, 0.05], r: [90, 0, 0] }, ankB: 40, aB: PRONE_ARM },
-  supine: { root: { p: [0, 0.09, 0.3], r: [-90, 0, 0] }, hipB: [55, 0], kneeB: 122, ankB: -22, aB: SUPINE_ARM },
+  sit: { root: { p: [0, SEAT + 0.06, 0], r: [0, 0, 0] }, hipB: [88.3, 5], kneeB: 88.3, aB: LAP },
+  prone: { root: { p: [0, 0.14, 0.05], r: [90, 0, 0] }, hipB: [2, 0], ankB: 40, aB: PRONE_ARM },
+  supine: { root: { p: [0, 0.09, 0.3], r: [-90, 0, 0] }, hipB: [55, 0], kneeB: 122, ankB: 25, aB: SUPINE_ARM },
 };
 
 const tilt = (n, h) => ({ neck: [0, 0, n], head: [0, 0, h] });

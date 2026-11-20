@@ -6,12 +6,12 @@ export { REGIONS, STRENGTH };
 // Anatomy follows standard texts (Gray's Anatomy; Travell & Simons for referral patterns).
 
 export const GROUPS = [
-  { id: "trapezius", name: "Trapezius", blurb: "The large kite-shaped sheet over the neck, shoulders and mid back. Its three parts pull the shoulder blade in different directions, and they tend to fail differently: the upper part overworks, the middle and lower parts go weak." },
-  { id: "scapular", name: "Shoulder blade elevators and retractors", blurb: "Three muscles under the trapezius that tie the inner edge of the shoulder blade to the spine. A stiff, one-sided neck often starts here." },
-  { id: "posterior-neck", name: "Back of the neck", blurb: "The extensors that hold your head up. They work all day when the head sits forward of the shoulders, and they're a common source of headaches." },
-  { id: "anterior-neck", name: "Front and side of the neck", blurb: "The strap muscles at the front and side, plus the deep stabilisers against the spine. Pain from these often shows up somewhere else: the face, the head or the arm." },
-  { id: "cuff", name: "Rotator cuff (upper back)", blurb: "Two muscles on the back of the shoulder blade. Their pain is often mistaken for neck pain, and the two commonly travel together." },
-  { id: "erectors", name: "Upper back extensors", blurb: "The long columns either side of the spine. When the upper back is stiff, the neck has to move more to make up for it." },
+  { id: "trapezius", name: "Trapezius", blurb: "The large kite-shaped sheet over the neck, shoulders and mid back. Its three parts pull the shoulder blade in different directions, and they tend to fail differently: the upper part overworks, the middle and lower parts go weak.", aliases: ["traps", "trap"] },
+  { id: "scapular", name: "Shoulder blade elevators and retractors", blurb: "Three muscles under the trapezius that tie the inner edge of the shoulder blade to the spine. A stiff, one-sided neck often starts here.", aliases: ["rhomboids", "levator", "shoulder blade muscles"] },
+  { id: "posterior-neck", name: "Back of the neck", blurb: "The extensors that hold your head up. They work all day when the head sits forward of the shoulders, and they're a common source of headaches.", aliases: ["neck extensors", "nape"] },
+  { id: "anterior-neck", name: "Front and side of the neck", blurb: "The strap muscles at the front and side, plus the deep stabilisers against the spine. Pain from these often shows up somewhere else: the face, the head or the arm.", aliases: ["neck flexors", "front of the neck", "side of the neck"] },
+  { id: "cuff", name: "Rotator cuff (upper back)", blurb: "Two muscles on the back of the shoulder blade. Their pain is often mistaken for neck pain, and the two commonly travel together.", aliases: ["cuff", "back of the shoulder blade", "rotator"] },
+  { id: "erectors", name: "Upper back extensors", blurb: "The long columns either side of the spine. When the upper back is stiff, the neck has to move more to make up for it.", aliases: ["erector spinae", "spinal erectors", "upper back"] },
 ];
 
 export const MUSCLES = [
@@ -25,6 +25,7 @@ export const MUSCLES = [
     pain: "An ache across the top of the shoulder and up the side of the neck. It often refers behind the ear and into the temple, and it's one of the commonest sources of tension-type headache.",
     triggers: "Shoulders held up at a desk, a phone wedged against the shoulder, a heavy bag on one side, armrests at the wrong height, stress.",
     check: "Pinch the roll of muscle between your neck and the tip of your shoulder. If that brings on your familiar ache or headache, this muscle is involved. Tilting your ear towards the other shoulder will feel tight on the sore side.",
+    aliases: ["traps", "trap", "upper traps", "trapezius"],
     exercises: ["upper-trap-stretch", "shrug", "chin-tuck"],
   },
   {
@@ -37,6 +38,7 @@ export const MUSCLES = [
     pain: "A burning ache between the spine and the shoulder blade, usually worse late in the day.",
     triggers: "Rounded shoulders, long spells reaching forward to a mouse or steering wheel.",
     check: "Squeeze your shoulder blades together and hold for 30 seconds. Burning or early fatigue points here. Pressing two finger-widths out from the spine at shoulder blade height will be tender.",
+    aliases: ["traps", "mid traps", "trapezius", "upper back"],
     exercises: ["prone-t", "band-row", "rhomboid-stretch"],
   },
   {
@@ -49,6 +51,7 @@ export const MUSCLES = [
     pain: "A dull mid-back ache. More often it's weak than sore: when it doesn't hold the shoulder blade down, the upper trapezius and levator scapulae take over and the neck pays for it.",
     triggers: "Slumped sitting, lots of overhead work, training the chest and shoulders without the back.",
     check: "Lie face down and lift one arm in a Y, thumb up. If the shoulder hitches towards your ear or you can't hold the arm level for 10 seconds, it's weak.",
+    aliases: ["traps", "lower traps", "trapezius", "mid back"],
     exercises: ["prone-y", "wall-angel", "prone-cobra"],
   },
   {
@@ -61,6 +64,7 @@ export const MUSCLES = [
     pain: "Pain in the angle where the neck meets the shoulder, running down the inner edge of the shoulder blade. This is the classic stiff neck: you can't turn your head towards the sore side.",
     triggers: "Sleeping awkwardly, a screen off to one side, a phone held between ear and shoulder, a shoulder bag, a cold draught.",
     check: "Turn your head towards the painful side. If it stops short or hurts at the angle of the neck, and there's a tender knot at the top inner corner of the shoulder blade, suspect this muscle.",
+    aliases: ["levator", "shoulder blade lifter", "neck and shoulder muscle"],
     exercises: ["levator-stretch", "chin-tuck", "wall-angel"],
   },
   {
@@ -73,6 +77,7 @@ export const MUSCLES = [
     pain: "An ache high along the inner edge of the shoulder blade. It's felt at rest more than on movement.",
     triggers: "Rounded shoulders, where tight chest muscles hold it on stretch all day.",
     check: "Press along the top of the inner edge of the shoulder blade. Reaching the arm across your body will pull on the same spot.",
+    aliases: ["rhomboids", "rhomboid", "between the shoulder blades", "upper back"],
     exercises: ["rhomboid-stretch", "band-row", "prone-t"],
   },
   {
@@ -85,6 +90,7 @@ export const MUSCLES = [
     pain: "A nagging ache between the shoulder blades, close to the inner edge of the blade. Sometimes with a crunching feeling when the shoulder moves.",
     triggers: "Rounded shoulders, long periods leaning forward, heavy rowing or pulling when unaccustomed.",
     check: "Press along the inner edge of the shoulder blade from the middle down. Tenderness there that eases when you pull the shoulders back points here.",
+    aliases: ["rhomboids", "rhomboid", "between the shoulder blades", "upper back"],
     exercises: ["rhomboid-stretch", "band-row", "prone-t"],
   },
   {
@@ -97,6 +103,7 @@ export const MUSCLES = [
     pain: "Refers to the very top of the head. Locally, an ache at the back and side of the upper neck.",
     triggers: "Head held forward or turned for long periods, whiplash, a draught on the neck.",
     check: "Turn your head against the resistance of your own hand on your temple. Pain at the back of the neck on the side you're turning towards suggests splenius.",
+    aliases: ["splenius", "neck extensor", "back of the neck"],
     exercises: ["neck-rotation", "neck-flexion-stretch", "iso-extension"],
   },
   {
@@ -109,6 +116,7 @@ export const MUSCLES = [
     pain: "A diffuse ache through the neck that can refer through the head to behind the eye, and to the angle of the neck. Often part of a stiff neck with limited turning.",
     triggers: "Forward-head posture, looking up or to one side for long periods.",
     check: "Drop your chin and turn your head away from the sore side. A pull deep at the side and back of the neck is this muscle on stretch.",
+    aliases: ["splenius", "neck extensor", "back of the neck"],
     exercises: ["levator-stretch", "neck-rotation", "iso-extension"],
   },
   {
@@ -121,6 +129,7 @@ export const MUSCLES = [
     pain: "A band of pain around the head towards the temple, and an ache at the back of the skull. Tightness around the greater occipital nerve can add tingling over the scalp.",
     triggers: "Forward-head posture, reading in bed propped on pillows, looking up for long periods.",
     check: "Press the thick column of muscle one finger-width from the midline just below the skull. If it's tender and tipping the head back against your hand brings on the ache, this is a likely source.",
+    aliases: ["semispinalis", "neck extensor", "back of the neck"],
     exercises: ["neck-flexion-stretch", "chin-tuck", "iso-extension"],
   },
   {
@@ -133,6 +142,7 @@ export const MUSCLES = [
     pain: "A deep, central ache at the back of the neck up to the base of the skull. Studies of long-standing neck pain show this muscle working less well.",
     triggers: "Sustained looking down, whiplash, any long period of neck pain.",
     check: "Hard to feel directly. A deep ache that comes on after 10 to 20 minutes of looking down, and eases when you support your head, fits.",
+    aliases: ["semispinalis", "deep neck extensor", "back of the neck"],
     exercises: ["chin-tuck", "iso-extension", "neck-flexion-stretch"],
   },
   {
@@ -145,6 +155,7 @@ export const MUSCLES = [
     pain: "A deep headache at the base of the skull that spreads forward in a band to the eye or forehead. It feels inside the head and is hard to pin to one spot.",
     triggers: "Chin poked forward towards a screen, varifocal glasses, looking up for long periods, eye strain.",
     check: "Press up under the edge of the skull, two finger-widths either side of the midline. If it's tender and brings on your headache, and a small nod feels stiff, these are involved.",
+    aliases: ["rectus capitis posterior major", "rectus capitis posterior minor", "obliquus capitis superior", "obliquus capitis inferior", "base of the skull"],
     exercises: ["chin-tuck", "supine-nod", "neck-flexion-stretch"],
   },
   {
@@ -157,6 +168,7 @@ export const MUSCLES = [
     pain: "It rarely hurts in the neck itself. It refers to the forehead, around the eye, the cheek, the ear and the top of the head, and can come with a vague unsteady feeling.",
     triggers: "Forward-head posture, sleeping face down with the head turned, whiplash, breathing with the neck instead of the diaphragm.",
     check: "Turn your head away and gently pinch the muscle between finger and thumb (don't press into the neck). Tenderness that brings on face or head pain points here.",
+    aliases: ["scm", "sternomastoid", "neck strap muscle"],
     exercises: ["scm-stretch", "supine-nod", "chin-tuck"],
   },
   {
@@ -169,6 +181,7 @@ export const MUSCLES = [
     pain: "Seldom felt in the neck. It refers to the chest, the shoulder, the inner edge of the shoulder blade and down the arm to the thumb and index finger.",
     triggers: "Upper-chest breathing, a long cough, carrying heavy loads, whiplash, forward-head posture.",
     check: "Tilt your ear to the opposite shoulder. A pull low at the side and front of the neck is the scalenes. If tingling in the arm changes with neck position, get it assessed.",
+    aliases: ["anterior scalene", "middle scalene", "posterior scalene", "scalenus medius", "scalenus posterior"],
     exercises: ["scalene-stretch", "chin-tuck"],
   },
   {
@@ -181,6 +194,7 @@ export const MUSCLES = [
     pain: "Rarely painful themselves. In most people with ongoing neck pain they're weak or slow to switch on, which leaves the sternocleidomastoid and scalenes to do the work.",
     triggers: "Any long period of neck pain, forward-head posture, whiplash.",
     check: "Lie on your back, tuck your chin and lift your head 2 cm. If the chin pokes forward or you shake within 20 seconds, endurance is low. Around 30 to 40 seconds is typical.",
+    aliases: ["neck flexors", "dnf", "deep neck muscles", "neck stabilisers"],
     exercises: ["supine-nod", "chin-tuck"],
   },
   {
@@ -193,6 +207,7 @@ export const MUSCLES = [
     pain: "A deep ache at the outer shoulder that can run down the outer arm. Lifting the arm out to the side hurts through the middle of the arc, and lying on that side is sore.",
     triggers: "Repeated reaching overhead, carrying heavy bags with the arm hanging, a fall onto the arm.",
     check: "Lift the arm out to the side. Pain between roughly 60 and 120 degrees that eases higher up suggests supraspinatus.",
+    aliases: ["rotator cuff", "cuff", "supraspinatus tendon"],
     exercises: ["scaption", "external-rotation", "cross-body-stretch"],
   },
   {
@@ -205,6 +220,7 @@ export const MUSCLES = [
     pain: "Felt deep in the front of the shoulder and down the outer arm, with an ache along the inner edge of the shoulder blade. Reaching behind your back is hard and sleeping on either side is uncomfortable.",
     triggers: "Long spells with the arm held forward (mouse, driving), throwing, pulling.",
     check: "Press the flat of the shoulder blade below its ridge. A tender spot that sends an ache to the front of the shoulder points here.",
+    aliases: ["rotator cuff", "cuff", "back of the shoulder blade"],
     exercises: ["external-rotation", "cross-body-stretch"],
   },
   {
@@ -217,38 +233,39 @@ export const MUSCLES = [
     pain: "An ache beside the spine in the upper and mid back, with stiffness after sitting. A stiff upper back makes the neck bend and turn further to compensate.",
     triggers: "Slumped sitting, long drives, little movement through the day.",
     check: "Sit on a chair and arch your upper back over the backrest. If it feels blocked, and there are tender ropey bands two finger-widths from the spine, these are involved.",
+    aliases: ["erectors", "spinal erectors", "back extensors", "upper back"],
     exercises: ["thoracic-extension", "prone-cobra", "wall-angel"],
   },
 ];
 
 // Each pattern lists muscles from most to least likely, with the reason.
 export const PATTERNS = [
-  { id: "skull-base", kind: "where", name: "Base of the skull", note: "Often comes with a headache that spreads forward.", muscles: [
+  { id: "skull-base", kind: "where", name: "Base of the skull", note: "Often comes with a headache that spreads forward.", aliases: ["tension headache", "headache", "back of the head"], muscles: [
     { id: "suboccipitals", why: "Deep ache under the skull edge, spreading to the eye" },
     { id: "semispinalis-capitis", why: "Band of pain from the back of the skull to the temple" },
     { id: "upper-trapezius", why: "Refers up the neck to behind the ear" },
     { id: "splenius-capitis", why: "Refers to the top of the head" },
   ] },
-  { id: "back-of-neck", kind: "where", name: "Back of the neck", note: "Central or just either side of the spine.", muscles: [
+  { id: "back-of-neck", kind: "where", name: "Back of the neck", note: "Central or just either side of the spine.", aliases: ["neck pain", "sore neck", "stiff neck"], muscles: [
     { id: "semispinalis-cervicis", why: "Deep central ache, worse after looking down" },
     { id: "semispinalis-capitis", why: "Thick column just off the midline" },
     { id: "splenius-capitis", why: "Back and side of the upper neck" },
     { id: "deep-neck-flexors", why: "Weak support at the front loads the back" },
   ] },
-  { id: "side-of-neck", kind: "where", name: "Side of the neck", note: "From below the ear to the shoulder.", muscles: [
+  { id: "side-of-neck", kind: "where", name: "Side of the neck", note: "From below the ear to the shoulder.", aliases: ["stiff neck", "crick in the neck", "neck pain", "wry neck"], muscles: [
     { id: "levator-scapulae", why: "Angle of the neck, with a stiff turn" },
     { id: "upper-trapezius", why: "Ache up the side from the shoulder" },
     { id: "scalenes", why: "Low at the side and front" },
     { id: "splenius-cervicis", why: "Deep at the side, with limited turning" },
     { id: "sternocleidomastoid", why: "Tender strap at the front and side" },
   ] },
-  { id: "top-of-shoulder", kind: "where", name: "Top of the shoulder", note: "Between the neck and the tip of the shoulder.", muscles: [
+  { id: "top-of-shoulder", kind: "where", name: "Top of the shoulder", note: "Between the neck and the tip of the shoulder.", aliases: ["tight shoulders", "shoulder knots", "shoulder tension"], muscles: [
     { id: "upper-trapezius", why: "The roll of muscle you can pinch" },
     { id: "levator-scapulae", why: "Knot at the top corner of the shoulder blade" },
     { id: "supraspinatus", why: "Deeper, with pain lifting the arm" },
     { id: "scalenes", why: "Can refer to the shoulder" },
   ] },
-  { id: "between-blades", kind: "where", name: "Between the shoulder blades", note: "Beside the spine or along the inner edge of the blade.", muscles: [
+  { id: "between-blades", kind: "where", name: "Between the shoulder blades", note: "Beside the spine or along the inner edge of the blade.", aliases: ["upper back pain", "shoulder blade pain", "knot in the back"], muscles: [
     { id: "rhomboid-major", why: "Nagging ache at the inner edge of the blade" },
     { id: "rhomboid-minor", why: "Higher on the inner edge" },
     { id: "middle-trapezius", why: "Burning nearer the spine" },
@@ -256,32 +273,32 @@ export const PATTERNS = [
     { id: "lower-trapezius", why: "Dull mid-back ache, often from weakness" },
     { id: "scalenes", why: "Refers here from the front of the neck" },
   ] },
-  { id: "front-and-face", kind: "where", name: "Front of the neck, face or eye", note: "Pain round the eye, forehead, cheek or ear with a sore neck.", muscles: [
+  { id: "front-and-face", kind: "where", name: "Front of the neck, face or eye", note: "Pain round the eye, forehead, cheek or ear with a sore neck.", aliases: ["face pain", "eye pain", "forehead", "ear pain", "headache"], muscles: [
     { id: "sternocleidomastoid", why: "Refers to forehead, eye, cheek and ear" },
     { id: "suboccipitals", why: "Band from the skull base to the eye" },
     { id: "scalenes", why: "Front and side of the lower neck" },
     { id: "deep-neck-flexors", why: "Weakness makes the others overwork" },
   ] },
-  { id: "turning", kind: "when", name: "Turning your head", note: "Checking a blind spot, looking over your shoulder.", muscles: [
+  { id: "turning", kind: "when", name: "Turning your head", note: "Checking a blind spot, looking over your shoulder.", aliases: ["stiff neck", "crick in the neck", "turning the head", "looking over the shoulder"], muscles: [
     { id: "levator-scapulae", why: "Blocks turning towards the sore side" },
     { id: "splenius-cervicis", why: "Pulls when turning away" },
     { id: "splenius-capitis", why: "Works to turn the head to its own side" },
     { id: "sternocleidomastoid", why: "Turns the head to the opposite side" },
     { id: "upper-trapezius", why: "Tight when you turn and tilt" },
   ] },
-  { id: "looking-down", kind: "when", name: "Looking down for a while", note: "Phone, laptop, reading.", muscles: [
+  { id: "looking-down", kind: "when", name: "Looking down for a while", note: "Phone, laptop, reading.", aliases: ["text neck", "tech neck", "phone neck", "laptop neck"], muscles: [
     { id: "semispinalis-capitis", why: "Holds the full weight of the head" },
     { id: "semispinalis-cervicis", why: "Deep ache that builds over minutes" },
     { id: "splenius-capitis", why: "Shares the load with semispinalis" },
     { id: "upper-trapezius", why: "Takes up the slack as the others tire" },
     { id: "deep-neck-flexors", why: "Poor endurance lets the head drift forward" },
   ] },
-  { id: "looking-up", kind: "when", name: "Looking up", note: "Top shelf, ceiling, the front row of the cinema.", muscles: [
+  { id: "looking-up", kind: "when", name: "Looking up", note: "Top shelf, ceiling, the front row of the cinema.", aliases: ["overhead work", "neck extension", "ceiling"], muscles: [
     { id: "suboccipitals", why: "Shortened and squeezed at the skull base" },
     { id: "semispinalis-capitis", why: "Working hard in its shortest position" },
     { id: "sternocleidomastoid", why: "On stretch at the front" },
   ] },
-  { id: "desk-day", kind: "when", name: "Builds through a desk day", note: "Fine in the morning, aching by late afternoon.", muscles: [
+  { id: "desk-day", kind: "when", name: "Builds through a desk day", note: "Fine in the morning, aching by late afternoon.", aliases: ["desk posture", "posture", "computer neck", "office"], muscles: [
     { id: "upper-trapezius", why: "Shoulders creep up towards the ears" },
     { id: "levator-scapulae", why: "Holds the shoulder blade up all day" },
     { id: "rhomboid-major", why: "Held on stretch by rounded shoulders" },
@@ -289,13 +306,13 @@ export const PATTERNS = [
     { id: "deep-neck-flexors", why: "Tire, and the chin drifts forward" },
     { id: "erector-spinae", why: "Stiffen in a slumped upper back" },
   ] },
-  { id: "lifting-arm", kind: "when", name: "Lifting or reaching with the arm", note: "Pain at the shoulder or outer arm with a sore neck.", muscles: [
+  { id: "lifting-arm", kind: "when", name: "Lifting or reaching with the arm", note: "Pain at the shoulder or outer arm with a sore neck.", aliases: ["shoulder pain", "reaching", "arm raise"], muscles: [
     { id: "supraspinatus", why: "Painful through the middle of the lift" },
     { id: "infraspinatus", why: "Deep ache at the front of the shoulder" },
     { id: "upper-trapezius", why: "Overworks when the cuff is sore" },
     { id: "lower-trapezius", why: "Weak control of the blade overhead" },
   ] },
-  { id: "into-arm", kind: "when", name: "Ache or tingling into the arm", note: "If there's numbness, weakness or constant tingling, see a GP or physio first. That pattern is often a nerve, and no exercise here treats it.", muscles: [
+  { id: "into-arm", kind: "when", name: "Ache or tingling into the arm", note: "If there's numbness, weakness or constant tingling, see a GP or physio first. That pattern is often a nerve, and no exercise here treats it.", aliases: ["pins and needles", "tingling arm", "trapped nerve", "pinched nerve", "arm pain"], muscles: [
     { id: "scalenes", why: "Refer down the arm to thumb and index finger" },
     { id: "infraspinatus", why: "Refers down the outer arm" },
     { id: "supraspinatus", why: "Refers to the outer shoulder and arm" },
@@ -308,60 +325,70 @@ export const EXERCISE_INFO = {
     steps: ["Sit tall and look straight ahead.", "Glide your chin straight back, as if making a double chin. Keep your eyes level.", "Hold. The back of your neck lengthens.", "Let the head return without poking forward."],
     feel: "A stretch at the base of the skull and gentle work deep at the front of the neck.",
     ease: "Don't nod down or tip back. If you feel the big strap muscles at the front standing out, use less effort.",
+    aliases: ["chin retraction", "neck retraction", "double chin exercise", "posture exercise"],
   },
   "supine-nod": {
     name: "Lying head nod", type: "Control", kit: "None", dose: "10 reps, 10 second hold, twice a day",
     steps: ["Lie on your back with knees bent and the back of your head resting on the floor.", "Nod slowly, as if saying a small yes. The head slides, it doesn't lift.", "Hold the nod with the front of the neck soft.", "Slide back to the start."],
     feel: "Light work deep behind the throat. Nothing at the surface.",
     ease: "Rest two fingers on the strap muscle at the front of your neck. If it pops up, nod less.",
+    aliases: ["head nod", "deep neck flexor exercise", "craniocervical flexion"],
   },
   "upper-trap-stretch": {
     name: "Upper trapezius stretch", type: "Stretch", kit: "Chair", dose: "3 times each side, 20 to 30 second hold",
     steps: ["Sit tall and hold the seat with the hand on the tight side.", "Rest the other hand over the top of your head.", "Let your ear drop towards the far shoulder. The hand adds weight, it doesn't pull.", "Come back up slowly."],
     feel: "A long pull from behind the ear to the tip of the shoulder.",
     ease: "Keep your nose pointing forward. Stop short of pain or tingling.",
+    aliases: ["trap stretch", "neck stretch", "side neck stretch", "ear to shoulder"],
   },
   "levator-stretch": {
     name: "Levator scapulae stretch", type: "Stretch", kit: "Chair", dose: "3 times each side, 20 to 30 second hold",
     steps: ["Sit tall and hold the seat with the hand on the tight side.", "Turn your head 45 degrees away from that side.", "Look down towards your armpit and rest your hand on the back of your head.", "Come back up slowly."],
     feel: "A pull from the top corner of the shoulder blade up the back and side of the neck.",
     ease: "The hand only guides. If it pinches on the side you're turning towards, turn a little less.",
+    aliases: ["neck stretch", "armpit stretch", "stiff neck stretch"],
   },
   "scm-stretch": {
     name: "Sternocleidomastoid stretch", type: "Stretch", kit: "Chair", dose: "3 times each side, 20 second hold",
     steps: ["Sit tall and press both hands on the collarbone of the tight side.", "Tilt your head away from that side.", "Turn your face back towards the tight side and lift your chin a little.", "Return to the middle."],
     feel: "A pull along the strap from the collarbone to behind the ear.",
     ease: "Go gently. Stop if you feel dizzy or see changes in your vision.",
+    aliases: ["scm stretch", "neck stretch", "front of neck stretch"],
   },
   "scalene-stretch": {
     name: "Scalene stretch", type: "Stretch", kit: "Chair", dose: "3 times each side, 20 second hold",
     steps: ["Sit tall and hold the seat with the hand on the tight side, shoulder down.", "Tilt your ear towards the far shoulder.", "Lift your chin slightly so you feel it low at the front and side.", "Return to the middle."],
     feel: "A pull low at the side of the neck, just above the collarbone.",
     ease: "Stop if tingling runs into the arm. Breathe low into your belly while you hold.",
+    aliases: ["neck stretch", "side neck stretch", "scalenes stretch"],
   },
   "neck-flexion-stretch": {
     name: "Neck flexion stretch", type: "Stretch", kit: "Chair", dose: "3 times, 20 to 30 second hold",
     steps: ["Sit tall and put both hands behind your head, one over the other.", "Tuck your chin, then let your head roll forward.", "Let the weight of your arms add to the stretch.", "Uncurl back to upright."],
     feel: "A stretch down the back of the neck to between the shoulder blades.",
     ease: "Keep the upper back upright so the neck does the bending. Don't pull.",
+    aliases: ["neck stretch", "chin to chest", "back of neck stretch"],
   },
   "neck-rotation": {
     name: "Neck rotation", type: "Mobility", kit: "Chair", dose: "10 times each way, 2 second pause at the end",
     steps: ["Sit tall with your chin level.", "Turn your head to one side as far as is comfortable.", "Come back through the middle.", "Turn to the other side."],
     feel: "A stretch at the back and side of the neck opposite the way you turn.",
     ease: "Keep the chin level and the shoulders still. Work up to the stiff side, never through pain.",
+    aliases: ["neck turns", "head turns", "neck mobility"],
   },
   "iso-extension": {
     name: "Isometric neck extension", type: "Strength", kit: "Chair", dose: "8 reps, 5 to 10 second hold, about half effort",
     steps: ["Sit tall and put both hands behind your head, one over the other.", "Press your head back into your hands. The hands stop it moving.", "Hold at about half effort, breathing normally.", "Release slowly."],
     feel: "The muscles at the back of the neck working without the neck moving.",
     ease: "Keep the chin tucked a little so the head doesn't tip back. Pain-free effort only.",
+    aliases: ["neck isometric", "neck strengthening", "isometric neck"],
   },
   "shrug": {
     name: "Shoulder shrug", type: "Strength", kit: "Dumbbells or filled bottles", dose: "3 sets of 10 to 12, three days a week",
     steps: ["Stand tall with a weight in each hand, arms relaxed.", "Lift both shoulders straight up towards your ears.", "Pause at the top.", "Lower over three seconds."],
     feel: "The top of the shoulders working. A loaded muscle copes better than a rested one.",
     ease: "Straight up and down, no rolling. Keep the chin back.",
+    aliases: ["shrugs", "dumbbell shrug", "trap shrug"],
     targets: ["upper-trapezius", "levator-scapulae"],
     also: ["rhomboid-minor", "forearm-flexors"],
   },
@@ -370,6 +397,7 @@ export const EXERCISE_INFO = {
     steps: ["Anchor the band at chest height and stand tall, arms out in front.", "Draw your elbows straight back, close to your ribs.", "Squeeze your shoulder blades together and pause.", "Let the arms go forward under control."],
     feel: "The muscles between the shoulder blades.",
     ease: "Shoulders stay down away from the ears. Don't lean back to finish the pull.",
+    aliases: ["resistance band row", "row", "cable row"],
     targets: ["middle-trapezius", "rhomboid-major", "rhomboid-minor", "deltoid-posterior"],
     also: ["latissimus-dorsi", "lower-trapezius", "teres-major", "biceps-brachii"],
   },
@@ -378,54 +406,63 @@ export const EXERCISE_INFO = {
     steps: ["Lie face down with your forehead on a folded towel, arms straight out to the sides, thumbs up.", "Draw your shoulder blades together and lift both arms a few centimetres.", "Pause at the top.", "Lower slowly."],
     feel: "The muscles between the shoulder blades, close to the spine.",
     ease: "Keep your forehead down and your neck long. Small lift, no arching.",
+    aliases: ["t raise", "reverse fly", "lying t"],
   },
   "prone-y": {
     name: "Prone Y raise", type: "Strength", kit: "Mat", dose: "3 sets of 8, 2 second hold",
     steps: ["Lie face down with your forehead on a folded towel, arms overhead in a Y, thumbs up.", "Slide your shoulder blades down towards your back pockets.", "Lift both arms a few centimetres and pause.", "Lower slowly."],
     feel: "Below and between the shoulder blades, not the top of the shoulders.",
     ease: "If your shoulders hitch towards your ears, lift less or do one arm at a time.",
+    aliases: ["y raise", "lying y", "lower trap exercise"],
   },
   "wall-angel": {
     name: "Wall angel", type: "Control", kit: "Wall", dose: "2 sets of 10, slow",
     steps: ["Stand with your back, head and backs of your arms against a wall, elbows bent in a W.", "Slide your arms up the wall towards a Y, keeping contact.", "Stop when anything lifts off the wall.", "Slide back down to the W."],
     feel: "Work below the shoulder blades and a stretch across the chest.",
     ease: "Keep the ribs down and the chin tucked. A smaller range with contact beats a bigger one without.",
+    aliases: ["wall slide", "wall slides", "posture exercise"],
   },
   "rhomboid-stretch": {
     name: "Rhomboid stretch", type: "Stretch", kit: "Chair", dose: "3 times, 20 second hold",
     steps: ["Sit tall and press your palms together in front at chest height.", "Reach forward and let your upper back round.", "Drop your chin and spread your shoulder blades apart.", "Uncurl back to upright."],
     feel: "A spreading stretch between the shoulder blades.",
     ease: "Breathe into the space between the blades. The lower back stays upright.",
+    aliases: ["upper back stretch", "between shoulder blades stretch", "hug stretch"],
   },
   "external-rotation": {
     name: "Band external rotation", type: "Strength", kit: "Resistance band", dose: "3 sets of 12 each side",
     steps: ["Stand side-on to the band's anchor with your elbow bent to 90 degrees and tucked at your side.", "Turn your forearm outward, keeping the elbow pinned.", "Pause at the end.", "Return slowly."],
     feel: "The back of the shoulder, over the shoulder blade.",
     ease: "A rolled towel between elbow and ribs keeps the elbow honest. Light band, slow reps.",
+    aliases: ["rotator cuff exercise", "shoulder rotation", "band rotation"],
   },
   "cross-body-stretch": {
     name: "Cross-body stretch", type: "Stretch", kit: "None", dose: "3 times each side, 30 second hold",
     steps: ["Stand tall and bring one arm across your chest at shoulder height.", "Hook the other forearm above the elbow.", "Draw the arm in towards your chest.", "Release."],
     feel: "A stretch at the back of the shoulder.",
     ease: "Keep the shoulder down and the trunk facing forward. No pinching at the front.",
+    aliases: ["shoulder stretch", "rear shoulder stretch", "posterior capsule stretch"],
   },
   "scaption": {
     name: "Scaption raise", type: "Strength", kit: "Light dumbbells or none", dose: "3 sets of 10",
     steps: ["Stand tall with arms at your sides, thumbs pointing forward.", "Raise both arms in a wide V, about 30 degrees forward of straight out to the side.", "Stop at shoulder height, thumbs up, and pause.", "Lower over three seconds."],
     feel: "The top and outer shoulder working, without the shoulders shrugging.",
     ease: "Stay below the height where it pinches. Lighter than you think.",
+    aliases: ["shoulder raise", "rotator cuff exercise", "full can"],
   },
   "thoracic-extension": {
     name: "Seated thoracic extension", type: "Mobility", kit: "Chair with a backrest", dose: "10 slow reps",
     steps: ["Sit back in a chair so the top of the backrest sits just below your shoulder blades.", "Put both hands behind your head, one over the other, elbows forward.", "Lean back over the backrest and open your chest to the ceiling.", "Come back to upright."],
     feel: "The upper back opening. A stretch across the chest.",
     ease: "The bend comes from the upper back. The hands carry the head so the neck doesn't crank.",
+    aliases: ["upper back stretch", "chair extension", "thoracic mobility"],
   },
   "prone-cobra": {
     name: "Prone cobra", type: "Strength", kit: "Mat", dose: "8 reps, 5 to 10 second hold",
     steps: ["Lie face down with your arms by your sides, palms down, forehead on a folded towel.", "Draw your shoulder blades back and down.", "Lift your chest and hands a few centimetres, turning your thumbs up, chin tucked, eyes on the floor.", "Lower slowly."],
     feel: "The muscles either side of the upper spine and below the shoulder blades.",
     ease: "Keep it low. If the lower back takes over, squeeze your buttocks and lift less.",
+    aliases: ["lying cobra", "back extension", "upper back strengthening"],
   },
 };
 

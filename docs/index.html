@@ -95,6 +95,20 @@ ul, ol { list-style: none; }
 .caption-row { flex-basis: 100%; display: flex; justify-content: center; }
 .caption { max-width: 580px; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px; font-size: 14.5px; backdrop-filter: blur(6px); display: flex; gap: 10px; align-items: baseline; }
 .caption b { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; }
+/* real time: a pressed-state toggle in the stage tools; Speed has no effect while it is on */
+.seg button.rt { display: inline-flex; align-items: center; gap: 6px; }
+.seg button:disabled { opacity: 0.4; pointer-events: none; }
+/* hold countdown: in the caption on a wide screen, under the phase pill on a phone (where the caption is hidden) */
+.count { display: inline-flex; align-items: baseline; gap: 2px; margin-left: auto; padding-left: 14px; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.count-n { font-size: 38px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; min-width: 2ch; text-align: right; }
+.count-u { font-size: 15px; font-weight: 600; }
+.caption.holding { position: relative; overflow: hidden; padding-bottom: 12px; }
+.count-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--accent-soft); }
+.count-bar i { display: block; height: 100%; background: var(--accent); transform-origin: left; }
+.head-r { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.head-count { display: none; position: relative; overflow: hidden; align-items: baseline; gap: 2px; padding: 4px 12px 8px; border-radius: var(--r); border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(6px); color: var(--accent); font-variant-numeric: tabular-nums; }
+.head-count .count-n { font-size: 40px; }
+.rt-head { display: none; pointer-events: auto; }
 .stage-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 .stage-msg:empty { display: none; }
 .stage-msg div { max-width: 36ch; }
@@ -187,10 +201,34 @@ button.eyebrow:hover { color: var(--accent); }
 .fine { font-size: 12.5px; color: var(--muted); max-width: 62ch; }
 .fine a { color: inherit; }
 
+/* ---------- search: a pill in the header, results drop over the page so nothing behind moves ---------- */
+.search { position: relative; display: flex; align-items: center; flex: 1 1 240px; max-width: 400px; min-width: 0; height: 36px; background: var(--chip); border: 1px solid var(--line); border-radius: 99px; color: var(--muted); }
+.search:focus-within { border-color: var(--accent); }
+.search:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.search-icon { position: absolute; left: 12px; pointer-events: none; }
+.search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; font: inherit; font-size: 14.5px; color: var(--ink); padding: 0 6px 0 35px; outline: none; border-radius: 99px; -webkit-appearance: none; appearance: none; }
+.search input::placeholder { color: var(--muted); opacity: 1; }
+.search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.search-key { font: 600 12px/1 var(--font-body); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; margin-right: 10px; background: var(--panel); }
+.search:focus-within .search-key, .search.has-value .search-key { display: none; }
+.search-clear { flex: none; width: 28px; height: 28px; margin-right: 4px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); text-align: center; }
+.search-clear:hover { color: var(--ink); background: var(--panel); }
+.search-clear:focus-visible { outline-offset: 0; border-radius: 50%; }
+.search-pop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; min-width: 320px; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 10px 30px color-mix(in srgb, #000 16%, transparent); padding: 5px; max-height: var(--search-max, 560px); overflow-y: auto; overscroll-behavior: contain; color: var(--ink); }
+.hit { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+.hit:hover { background: var(--chip); }
+.hit[aria-selected="true"] { background: var(--accent-soft); }
+.hit .n { font-weight: 600; display: block; }
+.hit .d { color: var(--muted); font-size: 13px; display: block; }
+.hit .d i { font-style: normal; color: var(--accent); }
+.hit .pill { align-self: center; }
+.hit.more { color: var(--accent); font-weight: 600; font-size: 14px; justify-content: center; }
+.search-none { padding: 10px 12px; color: var(--muted); font-size: 14px; }
+
 @media (max-width: 860px) {
   .bar { padding: 8px 12px; }
   .bar h1 { font-size: 19px; }
-  .bar p { display: none; }
+  .bar p:not(.search-none) { display: none; }
   .modes button { padding: 5px 11px; font-size: 13.5px; }
   .main { flex-direction: column; }
   .stage { flex: none; height: 54%; min-height: 300px; }
@@ -200,8 +238,18 @@ button.eyebrow:hover { color: var(--accent); }
   .caption-row { display: none; }   /* the highlighted step sits just below in the panel */
   .seg .lab { display: none; }
   .seg button { padding: 5px 9px; }
+  /* search takes its own full-width row under the title and the mode switch */
+  .search { order: 3; flex: 1 1 100%; max-width: none; height: 40px; }
+  .search input { font-size: 16px; }   /* 16px stops iOS zooming in on focus */
+  .search-key { display: none; }
+  .search-pop { min-width: 0; }
+  .head-count { display: inline-flex; }
+  .rt-tools { display: none; }   /* a third row of tools would cover the feet: on a phone the toggle sits top right */
+  .rt-head { display: inline-flex; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (hover: none) { .search-key { display: none; } }
+@media (max-width: 1100px) { .bar p:not(.search-none) { display: none; } }   /* room for the search on one row */
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .count-bar { display: none; } }
 </style>
 </head>
 <body>
@@ -210,6 +258,16 @@ button.eyebrow:hover { color: var(--accent); }
     <div class="brand">
       <h1>Muscle Atlas</h1>
       <p>Find the muscle behind an ache, or plan a strength day.</p>
+    </div>
+    <div class="search" id="search">
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m10.5 10.5 3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input id="search-input" type="search" role="combobox" aria-label="Search muscles, exercises and pain" aria-autocomplete="list" aria-expanded="false" aria-controls="search-list" placeholder="Search muscles, lifts, pain" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+      <kbd class="search-key" aria-hidden="true">/</kbd>
+      <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" hidden><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="m3.5 3.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <div class="search-pop" id="search-pop" hidden>
+        <ul id="search-list" role="listbox" aria-label="Search results"></ul>
+        <p class="search-none" id="search-none" role="status" hidden>Nothing found. Try a muscle, a stretch, a lift, a training day or where it hurts.</p>
+      </div>
     </div>
     <div class="modes" role="group" aria-label="Mode">
       <button data-mode="pain" aria-pressed="true">Pain and stretch</button>
@@ -225,7 +283,11 @@ button.eyebrow:hover { color: var(--accent); }
           <div class="stage-title" id="stage-title"></div>
           <div class="stage-sub" id="stage-sub"></div>
         </div>
-        <div class="phase" id="phase"></div>
+        <div class="head-r">
+          <div class="seg rt-head" hidden><button class="rt" data-act="real" id="btn-real-head" aria-pressed="false"><svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 5.2V8l1.8 1.3M5.4 1.4h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Real time</button></div>
+          <div class="phase" id="phase"></div>
+          <div class="head-count" id="head-count" role="timer" aria-label="Hold time left" hidden><span class="count-n"></span><span class="count-u">s</span><span class="count-bar"><i></i></span></div>
+        </div>
       </div>
       <div class="tip" id="tip"></div>
       <div class="tools" id="tools-anatomy" hidden>
@@ -245,9 +307,12 @@ button.eyebrow:hover { color: var(--accent); }
         <div class="seg" id="clear-wrap" hidden><button data-act="clear">Show all muscles</button></div>
       </div>
       <div class="tools" id="tools-figure" hidden>
-        <div class="caption-row"><div class="caption" id="caption"><b id="cap-n"></b><span id="cap-t"></span></div></div>
+        <div class="caption-row"><div class="caption" id="caption"><b id="cap-n"></b><span id="cap-t"></span><span class="count" id="cap-count" role="timer" aria-label="Hold time left" hidden><span class="count-n"></span><span class="count-u">s</span></span><span class="count-bar" hidden><i></i></span></div></div>
         <div class="seg">
           <button class="icon" data-act="play" id="btn-play" aria-label="Pause"></button>
+        </div>
+        <div class="seg rt-tools">
+          <button class="rt" data-act="real" id="btn-real" aria-pressed="false"><svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 5.2V8l1.8 1.3M5.4 1.4h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Real time</button>
         </div>
         <div class="seg" role="group" aria-label="Speed">
           <span class="lab">Speed</span>

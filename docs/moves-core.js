@@ -18,7 +18,7 @@ const add = (a, b, k = 1) => a.map((v, i) => v + b[i] * k);
 // shoulders so the wrists need no more than the 75 degrees they can bend
 const KNEE_Z = -0.05;
 const QUAD_ROOT = [0, 0.505, KNEE_Z];
-const QUAD_LEG = { p: [0.09, 0.068, KNEE_Z - 0.4], pole: [0, -1, 0.15], foot: 148 };
+const QUAD_LEG = { p: [0.09, 0.068, KNEE_Z - 0.4], pole: [0, -1, 0.15], foot: 144 };
 const QUAD_HAND = floorHand(0.16, 0.57, { pole: [0.3, -1, 0.1] });
 
 // ---------- lying on the back ----------
@@ -72,7 +72,7 @@ function THIGH_R(y) { return { f: "thigh", p: [-0.1, y, 0.01], n: [1, 0, 0], g: 
 // ---------- half kneeling ----------
 // left knee down behind the hip, right foot flat in front with the shin upright
 const HK_ANKLE_R = [-0.1, MAT + 0.055, 0.5];
-const HK_KNEE_L = { p: [0.1, 0.068, -0.52], pole: [0, -1, 0.25], foot: 148 };
+const HK_KNEE_L = { p: [0.1, 0.068, -0.52], pole: [0, -1, 0.25], foot: 144 };
 // hands on the hips: palms on the sides of the pelvis, thumbs back
 const ON_HIP_L = { f: "pelvis", p: [0.178, 0.08, 0.0], n: [-1, 0, 0], g: [0, -0.3, 1], pole: [1, -0.2, -0.6], curl: "cup" };
 const ON_HIP_R = { ...ON_HIP_L, p: [-0.178, 0.08, 0.0], n: [1, 0, 0], pole: [-1, -0.2, -0.6] };
@@ -82,8 +82,9 @@ const PRONE_ROOT = [0, 0.153, 0.05];
 const BY_SHOULDER = floorHand(0.26, 0.54, { g: [-0.15, 0, 1], pole: [0.5, -0.4, -1] });
 
 // ---------- plank ----------
-// forearms on the mat, elbows under the shoulders, toes tucked under
-const PLANK_ANKLE = [0.1, 0.14, -0.81];
+// forearms on the mat, elbows under the shoulders, toes tucked under: the feet rest on the balls with the
+// toes flat (leg specs give the ball of the foot, not the ankle; the ankle sits about where it did before)
+const PLANK_BALL = [0.0878, 0.0236, -0.8015];
 const PLANK_UP = { root: { p: [0, 0.25, 0], r: [81.6, 0, 0] }, lum: [0, 0, 0], thor: [0, 0, 0] };
 const FOREARM = floorHand(0.11, 0.78, { g: [-0.35, 0, 1], pole: [0.2, -0.3, 1] });
 
@@ -97,8 +98,8 @@ export const CORE_BASES = {
     aR: { f: "thigh", p: [-0.1, -0.06, 0.0], n: [1, 0, 0], g: [0, -0.3, 1], snap: true, pole: [-0.5, 0, -1], curl: "cup" },
   },
   halfKneel: { root: { p: [0, 0.49, 0.0], r: [0, 0, 0] }, legL: HK_KNEE_L, legR: { p: HK_ANKLE_R, pole: [0, 0, 1], foot: 0 }, aL: ON_HIP_L, aR: ON_HIP_R },
-  proneMat: { root: { p: PRONE_ROOT, r: [90, 0, 0] }, ankB: 40, aB: BY_SHOULDER },
-  forearms: { root: { p: [0, 0.125, 0.02], r: [80, 0, 0] }, lum: [-16, 0, 0], thor: [-4, 0, 0], legB: { p: PLANK_ANKLE, pole: [0, -1, 0], foot: 32 }, aB: FOREARM, neck: [-14, 0, 0], head: [-6, 0, 0] },
+  proneMat: { root: { p: PRONE_ROOT, r: [90, 0, 0] }, hipB: [2, 0], ankB: 34, aB: BY_SHOULDER },
+  forearms: { root: { p: [0, 0.125, 0.01], r: [80, 0, 0] }, lum: [-16, 0, 0], thor: [-4, 0, 0], legB: { ball: PLANK_BALL, pole: [0, -1, 0], foot: 65 }, aB: FOREARM, neck: [-14, 0, 0], head: [-6, 0, 0] },
 };
 
 // ---------- cat-cow ----------
@@ -182,7 +183,7 @@ export const CORE_MOVES = {
       { t: 0.92, ...child(0.33), e: "l" },
       { t: 1, e: "o" },
     ],
-    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1 }, { at: 0.36, step: 2, label: "Hold 30 s", w: 1 }, { at: 0.78, step: 3 }],
+    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1 }, { at: 0.36, step: 2, label: "Hold 20 to 30 s", w: 1 }, { at: 0.78, step: 3 }],
   },
 
   "knee-to-chest": {
@@ -198,7 +199,7 @@ export const CORE_MOVES = {
       { t: 0.93, ...REACH, e: "i" },
       { t: 1, e: "o" },
     ],
-    phases: [{ at: 0, step: 0 }, { at: 0.08, step: 1 }, { at: 0.3, step: 2 }, { at: 0.46, step: 2, label: "Hold 20 to 30 s", w: 1 }, { at: 0.76, step: 3 }],
+    phases: [{ at: 0, step: 0 }, { at: 0.08, step: 1 }, { at: 0.3, step: 2 }, { at: 0.46, step: 2, label: "Hold 15 to 30 s", w: 1 }, { at: 0.76, step: 3 }],
   },
 
   "bird-dog": {
@@ -213,7 +214,7 @@ export const CORE_MOVES = {
       { t: 0.92, e: "o" },
       { t: 1 },
     ],
-    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1, w: 1 }, { at: 0.38, step: 2, label: "Hold 5 s", w: 1 }, { at: 0.66, step: 3 }],
+    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1, w: 1 }, { at: 0.38, step: 2, label: "Hold up to 10 s", w: 1 }, { at: 0.66, step: 3 }],
   },
 
   "dead-bug": {
@@ -239,7 +240,7 @@ export const CORE_MOVES = {
       { t: 0.92 },
       { t: 1 },
     ],
-    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1, w: 1 }, { at: 0.34, step: 2, label: "Hold 10 to 20 s", w: 1 }, { at: 0.7, step: 3 }],
+    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1, w: 1 }, { at: 0.34, step: 2, label: "Hold up to 10 s", w: 1 }, { at: 0.7, step: 3 }],
   },
 
   "side-bend-stretch": {
@@ -256,7 +257,7 @@ export const CORE_MOVES = {
       { t: 0.915, aL: ARM_OUT, e: "i" },
       { t: 1, e: "o" },
     ],
-    phases: [{ at: 0, step: 0 }, { at: 0.29, step: 1, w: 1 }, { at: 0.46, step: 2, label: "Hold 20 to 30 s", w: 1 }, { at: 0.72, step: 3 }],
+    phases: [{ at: 0, step: 0 }, { at: 0.29, step: 1, w: 1 }, { at: 0.46, step: 2, label: "Hold 15 to 30 s", w: 1 }, { at: 0.72, step: 3 }],
   },
 
   "hip-flexor-stretch": {
@@ -293,9 +294,9 @@ export const CORE_MOVES = {
       { t: 0.1 },
       { t: 0.3, ...PLANK_UP },
       { t: 0.66, ...PLANK_UP },
-      { t: 0.82, root: { p: [0, 0.175, 0.0], r: [73, 0, 0] }, lum: [0, 0, 0], thor: [0, 0, 0] },
+      { t: 0.82, root: { p: [0, 0.155, 0.0], r: [73, 0, 0] }, lum: [0, 0, 0], thor: [0, 0, 0] },
       { t: 1 },
     ],
-    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1, w: 1 }, { at: 0.3, step: 2, label: "Hold 20 to 30 s", w: 1 }, { at: 0.66, step: 3 }],
+    phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1, w: 1 }, { at: 0.3, step: 2, label: "Hold 10 to 30 s", w: 1 }, { at: 0.66, step: 3 }],
   },
 };

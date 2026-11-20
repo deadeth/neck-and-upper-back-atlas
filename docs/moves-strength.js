@@ -1,6 +1,8 @@
 // Exercise keyframes for the strength days. Same format as moves.js (see its header).
 // Standing lifts plant the feet with leg IK (legB: ankle in the room, knee direction, foot pitch),
-// so the pelvis can drop or hinge without the feet sliding.
+// so the pelvis can drop or hinge without the feet sliding. A foot up on its ball gives `ball` (where the toe
+// joint goes) in place of `p`, in every key of the move: `foot` then pitches the foot heel up about the ball,
+// and the figure lays the toes flat on the ground unless the spec gives `toes` (degrees, positive = up).
 
 const chest = (p, extra) => ({ f: "chest", p, ...extra });
 const world = (p, extra) => ({ f: "world", p, ...extra });
@@ -15,12 +17,13 @@ export const STRENGTH_BASES = {
   standIK: { root: { p: STAND, r: [0, 0, 0] }, aB: HOLD, legB: FEET },
   // face up on the mat, knees bent, feet flat, arms long on the floor
   supineIK: {
-    root: { p: [0, 0.09, 0.3], r: [-90, 0, 0] }, legB: { p: [0.1, 0.054, 0.63], pole: [0, 1, 0.2], foot: 0 },
+    root: { p: [0, 0.09, 0.3], r: [-90, 0, 0] }, legB: { p: [0.1, 0.066, 0.63], pole: [0, 1, 0.2], foot: 0 },
     aB: world([0.26, 0.018, 0.2], { pole: [1, 0, 0.2], n: [0, -1, 0], g: [0, 0, 1], curl: "flat" }),
   },
-  // high plank: hands under the shoulders, toes on the floor, a straight line from heels to head
+  // high plank: hands under the shoulders, on the balls of the feet with the toes flat on the mat (leg specs
+  // give the ball, not the ankle), a straight line from heels to head
   plank: {
-    root: { p: [0, 0.403, 0.019], r: [73, 0, 0] }, legB: { p: [0.08, 0.164, -0.773], pole: [0, -1, 0], foot: 75 },
+    root: { p: [0, 0.403, 0.019], r: [73, 0, 0] }, legB: { ball: [0.0738, 0.0235, -0.7405], pole: [0, -1, 0], foot: 60 },
     aB: world([0.24, 0.016, 0.5], { pole: [0.6, -1, -0.3], n: [0, -1, 0], g: [0, 0, 1], curl: "flat" }),
   },
   // hanging from the pull-up bar, knees bent so the feet stay clear of the floor
@@ -64,10 +67,11 @@ export const STRENGTH_MOVES = {
     phases: PH(0.1, 0.45, 0.6, "Pause 1 s"),
   },
 
-  // left foot forward; the back heel is up, the back knee stops about 1 cm off the floor
+  // left foot forward; the back heel is up on the ball of the foot (its spec gives the ball, not the ankle),
+  // the back knee stops about 1 cm off the floor
   "split-squat": {
     side: "L", base: "standIK", props: ["weights"], dur: 5, view: { yaw: 120, pitch: 8 },
-    rest: { legL: { p: [0.09, 0.054, 0.33], pole: [0, 0, 1], foot: 0 }, legR: { p: [-0.09, 0.141, -0.5], pole: [0, -0.4, 1], foot: 40 } },
+    rest: { legL: { p: [0.09, 0.054, 0.33], pole: [0, 0, 1], foot: 0 }, legR: { ball: [-0.0959, 0.0116, -0.4635], pole: [0, -0.4, 1], foot: 50 } },
     keys: [
       { t: 0, root: { p: [0, 0.76, -0.02], r: [0, 0, 0] } },
       { t: 0.1, root: { p: [0, 0.76, -0.02], r: [0, 0, 0] } },
@@ -79,14 +83,16 @@ export const STRENGTH_MOVES = {
     phases: PH(0.1, 0.45, 0.6, "Pause 1 s"),
   },
 
+  // the feet pivot on the balls (leg specs give the ball, not the ankle), so the heels rise, the ankles come up
+  // and forward and the body goes with them; the toes stay flat on the floor
   "calf-raise": {
     base: "standIK", props: [], dur: 4, view: { yaw: 150, pitch: 6 },
-    rest: { aB: { ...HOLD, curl: "rest" } },
+    rest: { aB: { ...HOLD, curl: "rest" }, legB: { ball: [0.1237, 0.01, 0.0918], pole: [0, 0, 1], foot: 0 } },
     keys: [
       { t: 0 },
       { t: 0.1 },
-      { t: 0.4, root: { p: [0, 0.946, 0.044], r: [0, 0, 0] }, legB: { p: [0.071, 0.121, 0.046], pole: [0, 0, 1], foot: 30 } },
-      { t: 0.56, root: { p: [0, 0.946, 0.044], r: [0, 0, 0] }, legB: { p: [0.071, 0.121, 0.046], pole: [0, 0, 1], foot: 30 } },
+      { t: 0.4, root: { p: [0, 0.934, 0.04], r: [0, 0, 0] }, legB: { ball: [0.1237, 0.01, 0.0918], pole: [0, 0, 1], foot: 40 } },
+      { t: 0.56, root: { p: [0, 0.934, 0.04], r: [0, 0, 0] }, legB: { ball: [0.1237, 0.01, 0.0918], pole: [0, 0, 1], foot: 40 } },
       { t: 0.94 },
       { t: 1 },
     ],
@@ -107,14 +113,14 @@ export const STRENGTH_MOVES = {
     phases: PH(0.1, 0.42, 0.6, "Squeeze 2 s"),
   },
 
-  // the body pivots on the toes, staying straight; hands stay planted under the shoulders
+  // the body pivots on the balls of the feet, staying straight; hands stay planted under the shoulders
   "push-up": {
     base: "plank", props: ["mat"], dur: 4, view: { yaw: 40, pitch: 12 },
     keys: [
       { t: 0 },
       { t: 0.1 },
-      { t: 0.45, root: { p: [0, 0.193, 0.053], r: [88, 0, 0] }, legB: { p: [0.08, 0.164, -0.773], pole: [0, -1, 0], foot: 88 } },
-      { t: 0.58, root: { p: [0, 0.193, 0.053], r: [88, 0, 0] }, legB: { p: [0.08, 0.164, -0.773], pole: [0, -1, 0], foot: 88 } },
+      { t: 0.45, root: { p: [0, 0.193, 0.075], r: [88, 0, 0] }, legB: { ball: [0.0738, 0.0235, -0.7405], pole: [0, -1, 0], foot: 68 } },
+      { t: 0.58, root: { p: [0, 0.193, 0.075], r: [88, 0, 0] }, legB: { ball: [0.0738, 0.0235, -0.7405], pole: [0, -1, 0], foot: 68 } },
       { t: 0.94 },
       { t: 1 },
     ],

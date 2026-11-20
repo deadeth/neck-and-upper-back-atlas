@@ -18,9 +18,11 @@ import scipy.sparse as sp
 import trimesh
 import fast_simplification
 from scipy.spatial import cKDTree
+from scipy.ndimage import gaussian_filter1d
 
-from parts import (MUSCLES, SKULL, CERV, THOR, LUMB, RIBS, STERNUM, CARPUS, METACARPALS, DIGITS, FOOT_RE, LEVELS,
+from parts import (MUSCLES, SKULL, CERV, THOR, LUMB, RIBS, STERNUM, CARPUS, METACARPALS, DIGITS, FOOT_RE, TOES_RE, TOE_RAYS, LEVELS,
                    MUSCLE_KEEP, CUT_Z, HUMERUS_CUT_Z, ORIGIN, REGION_UNITS, BELOW_CUT, REGION_KEEP)
+from parts import SHEATH_UNITS, SHEATH_BORDER, SHEATH_FRONT_Y
 
 CT = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
 NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
@@ -81,6 +83,59 @@ def clip_below(p, f, z):
     if p[:, 2].max() <= z:
         return p, f
     m = trimesh.intersections.slice_mesh_plane(trimesh.Trimesh(p, f, process=False), [0, 0, -1], [0, 0, z], cap=False)
+    return np.asarray(m.vertices), np.asarray(m.faces)
+
+
+def rectus_border(p, f, sg, step=2.0, sigma=1.5):
+    """lateral border of a rectus abdominis (mm from the midline) as a function of height: the widest point
+    of the mesh's cross-section at each level, lightly smoothed"""
+    e = np.unique(np.sort(np.vstack([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]]), axis=1), axis=0)
+    a, b = p[e[:, 0]], p[e[:, 1]]
+    zs = np.arange(p[:, 2].min() + 0.5, p[:, 2].max(), step)
+    xl = np.empty(len(zs))
+    for i, z in enumerate(zs):
+        c = (a[:, 2] - z) * (b[:, 2] - z) <= 0
+        t = (z - a[c, 2]) / np.where(b[c, 2] != a[c, 2], b[c, 2] - a[c, 2], 1.0)
+        xl[i] = ((a[c, 0] + t * (b[c, 0] - a[c, 0])) * sg).max()
+    xl = gaussian_filter1d(xl, sigma, mode="nearest")
+    return lambda z: np.interp(z, zs, xl)   # held at its end values above and below the rectus
+
+
+def cut_sheath(p, f, border, sg, front_y):
+    """drop the part of a mesh in front of front_y and medial to border(z); split the triangles on the
+    cut line so the kept part ends in a clean edge, then drop the scraps left floating"""
+    g = np.maximum(p[:, 0] * sg - border(p[:, 2]), p[:, 1] - front_y)
+    g[np.abs(g) < 1e-6] = 1e-6
+    keep = g > 0
+    k = keep[f].sum(axis=1)
+    out = [f[k == 3]]
+    pts, new = [p], {}
+
+    def cross(a, b):   # vertex where edge a-b crosses g = 0
+        key = (min(a, b), max(a, b))
+        if key not in new:
+            t = g[a] / (g[a] - g[b])
+            new[key] = len(p) + len(new)
+            pts.append((p[a] + t * (p[b] - p[a]))[None])
+        return new[key]
+
+    for tri, n in zip(f[(k == 1) | (k == 2)], k[(k == 1) | (k == 2)]):
+        i = int(np.flatnonzero(keep[tri] == (n == 1))[0])
+        a, b, c = np.roll(tri, -i)   # a is the lone vertex; rolling keeps the winding
+        ab, ac = cross(a, b), cross(a, c)
+        out.append(np.array([[a, ab, ac]]) if n == 1 else np.array([[ab, b, c], [ab, c, ac]]))
+    m = trimesh.Trimesh(np.vstack(pts), np.vstack(out), process=False)
+    m.merge_vertices(digits_vertex=2)
+    # pieces joined only through edges shared by exactly two faces: the scan's loose patches that touch
+    # the sheet at a seam come away with the rest of the scraps
+    e = np.sort(m.faces[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1)
+    _, eid, cnt = np.unique(e, axis=0, return_inverse=True, return_counts=True)
+    order = np.argsort(eid.ravel(), kind="stable")
+    pair = order[np.repeat(cnt == 2, cnt)].reshape(-1, 2) // 3
+    lab = trimesh.graph.connected_component_labels(pair, node_count=len(m.faces))
+    size = np.bincount(lab)
+    m.update_faces(size[lab] >= 0.1 * size.max())
+    m.remove_unreferenced_vertices()
     return np.asarray(m.vertices), np.asarray(m.faces)
 
 
@@ -196,6 +251,28 @@ def hand_rig(bones, s, S):
     return {k: [round(float(x), 4) for x in v] for k, v in out.items()}
 
 
+def toe_rig(bones, s):
+    """Toe hinge for one foot, in model space: the centre of the five metatarsal heads (the ball of the
+    foot) and the line through them, pointed so that a positive turn about it lifts the toes."""
+    M = lambda name: to_model(bones[name][0])
+    back = M(f"{s} talus").mean(axis=0)
+    heads, along = [], np.zeros(3)
+    for o in TOE_RAYS:
+        v = M(f"{s} {o} metatarsal bone")
+        c = v.mean(axis=0)
+        a = np.linalg.svd(v - c, full_matrices=False)[2][0]
+        a = a if np.dot(c - back, a) > 0 else -a
+        t = (v - c) @ a
+        heads.append(v[t > t.max() - 0.2 * (t.max() - t.min())].mean(axis=0))   # the distal fifth: the head
+        along += a
+    heads = np.array(heads)
+    centre = heads.mean(axis=0)
+    axis = np.linalg.svd(heads - centre, full_matrices=False)[2][0]
+    if np.cross(axis, along)[1] < 0:   # axis x forward points up: a positive turn raises the toes
+        axis = -axis
+    return centre, axis / np.linalg.norm(axis)
+
+
 def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
     muscles = read_glb(anatomy_path)
     bones = read_glb(skeleton_path)
@@ -255,7 +332,9 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
                     bone("phalanx", [name], f"f{d}{seg[0]}{S}", "hand", 0.7, False, True, S, as_one=True)
         bone("femur", [f"{s} femur"], "fem" + S, "femur", 1.0, False, True, S)
         bone("shin", [f"{s} tibia", f"{s} fibula", f"{s} patella"], "tib" + S, "shin", 1.0, False, True, S)
-        bone("foot", matching(FOOT_RE, s), "foot" + S, "foot", 0.3, False, True, S, as_one=True)
+        toes = matching(TOES_RE, s)
+        bone("foot", [n for n in matching(FOOT_RE, s) if n not in toes], "foot" + S, "foot", 0.3, False, True, S, as_one=True)
+        bone("toes", toes, "toes" + S, "toes", 0.3, False, True, S, as_one=True)
 
     # ---------- joints (source mm) ----------
     def body_pivot(name):
@@ -339,6 +418,10 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
                     pe, fe = clip_below(*weld(*muscles[extra.format(s=s_)]), CUT_Z)
                     meshes.append(simplify(pe, fe, REGION_KEEP))
                 p, f = merge(meshes)
+                if uid in SHEATH_UNITS:
+                    sg = 1.0 if s_ == "left" else -1.0
+                    border = rectus_border(*weld(*muscles[SHEATH_BORDER.format(s=s_)]), sg)
+                    p, f = cut_sheath(p, f, border, sg, SHEATH_FRONT_Y)
                 idx, w = skin_weights(p, f, [j.format(S=S) for j in joints], trees)
                 parts.append(dict(id=uid, kind="muscle", side=S, name=uid, joint="", region=region, p=p, f=f, skin=(idx, w)))
 
@@ -397,6 +480,8 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         for k in ("palm", "pronEnd", "acrom"):
             rig[k + S] = r3(to_model(X[k + S]))
         rig.update(hand_rig(bones, "left" if S == "L" else "right", S))
+        ball, axis = toe_rig(bones, "left" if S == "L" else "right")
+        rig["joints"]["toes" + S], rig["toeAxis" + S] = r3(ball), r3(axis)
     rig["joints"].update(FINGER_JOINTS)
 
     for name, out in files.items():
