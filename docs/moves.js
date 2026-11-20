@@ -22,6 +22,9 @@
 // start: "close" opens framed on the neck and shoulders. view: the camera angle that shows the worked muscle.
 // phases: which step of the instructions is on screen from `at` onward. w marks the working phase.
 
+import { CORE_BASES, CORE_MOVES } from "./moves-core.js";
+import { STRENGTH_BASES, STRENGTH_MOVES } from "./moves-strength.js";
+
 export const SEAT = 0.41;   // stool height
 const SKULL = [0, 0.065, 0.015];   // a point inside the skull, in the head frame, for palms to face
 
@@ -346,3 +349,6 @@ export const MOVES = {
     phases: [{ at: 0, step: 0 }, { at: 0.1, step: 1 }, { at: 0.24, step: 2, w: 1 }, { at: 0.44, step: 2, label: "Hold 5 to 10 s", w: 1 }, { at: 0.76, step: 3 }],
   },
 };
+
+Object.assign(BASES, CORE_BASES, STRENGTH_BASES);
+Object.assign(MOVES, CORE_MOVES, STRENGTH_MOVES);

@@ -1,4 +1,8 @@
 // Everything the panel says: groups, muscles, pain patterns, exercise notes.
+// This file holds the neck and upper back; content-body.js holds the other regions and the strength days.
+import { REGIONS, BODY_GROUPS, BODY_MUSCLES, BODY_PATTERNS, BODY_EXERCISES, STRENGTH } from "./content-body.js";
+
+export { REGIONS, STRENGTH };
 // Anatomy follows standard texts (Gray's Anatomy; Travell & Simons for referral patterns).
 
 export const GROUPS = [
@@ -17,6 +21,7 @@ export const MUSCLES = [
     does: "Lifts the shoulder blade and turns it upward as you raise your arm. Tilts the head to the same side and turns it to the opposite side.",
     attach: "Base of the skull and the ligament down the back of the neck, to the outer third of the collarbone.",
     nerve: "Accessory nerve (CN XI), with C3 and C4.",
+    ppl: "pull",
     pain: "An ache across the top of the shoulder and up the side of the neck. It often refers behind the ear and into the temple, and it's one of the commonest sources of tension-type headache.",
     triggers: "Shoulders held up at a desk, a phone wedged against the shoulder, a heavy bag on one side, armrests at the wrong height, stress.",
     check: "Pinch the roll of muscle between your neck and the tip of your shoulder. If that brings on your familiar ache or headache, this muscle is involved. Tilting your ear towards the other shoulder will feel tight on the sore side.",
@@ -28,6 +33,7 @@ export const MUSCLES = [
     does: "Draws the shoulder blade straight back towards the spine.",
     attach: "Spinous processes of C7 to T3, to the acromion and the spine of the shoulder blade.",
     nerve: "Accessory nerve (CN XI), with C3 and C4.",
+    ppl: "pull",
     pain: "A burning ache between the spine and the shoulder blade, usually worse late in the day.",
     triggers: "Rounded shoulders, long spells reaching forward to a mouse or steering wheel.",
     check: "Squeeze your shoulder blades together and hold for 30 seconds. Burning or early fatigue points here. Pressing two finger-widths out from the spine at shoulder blade height will be tender.",
@@ -39,6 +45,7 @@ export const MUSCLES = [
     does: "Pulls the shoulder blade down and back, and steadies it when you reach overhead.",
     attach: "Spinous processes of T4 to T12, to the inner end of the spine of the shoulder blade.",
     nerve: "Accessory nerve (CN XI), with C3 and C4.",
+    ppl: "pull",
     pain: "A dull mid-back ache. More often it's weak than sore: when it doesn't hold the shoulder blade down, the upper trapezius and levator scapulae take over and the neck pays for it.",
     triggers: "Slumped sitting, lots of overhead work, training the chest and shoulders without the back.",
     check: "Lie face down and lift one arm in a Y, thumb up. If the shoulder hitches towards your ear or you can't hold the arm level for 10 seconds, it's weak.",
@@ -50,6 +57,7 @@ export const MUSCLES = [
     does: "Lifts the shoulder blade. Bends and turns the neck to the same side.",
     attach: "Transverse processes of C1 to C4, to the top inner corner of the shoulder blade.",
     nerve: "Dorsal scapular nerve (C5), with C3 and C4.",
+    ppl: "pull",
     pain: "Pain in the angle where the neck meets the shoulder, running down the inner edge of the shoulder blade. This is the classic stiff neck: you can't turn your head towards the sore side.",
     triggers: "Sleeping awkwardly, a screen off to one side, a phone held between ear and shoulder, a shoulder bag, a cold draught.",
     check: "Turn your head towards the painful side. If it stops short or hurts at the angle of the neck, and there's a tender knot at the top inner corner of the shoulder blade, suspect this muscle.",
@@ -61,6 +69,7 @@ export const MUSCLES = [
     does: "Draws the shoulder blade back and up, and holds its inner edge against the ribs.",
     attach: "Spinous processes of C7 and T1, to the inner edge of the shoulder blade at the level of its spine.",
     nerve: "Dorsal scapular nerve (C4 and C5).",
+    ppl: "pull",
     pain: "An ache high along the inner edge of the shoulder blade. It's felt at rest more than on movement.",
     triggers: "Rounded shoulders, where tight chest muscles hold it on stretch all day.",
     check: "Press along the top of the inner edge of the shoulder blade. Reaching the arm across your body will pull on the same spot.",
@@ -72,6 +81,7 @@ export const MUSCLES = [
     does: "Draws the shoulder blade back towards the spine and turns its socket downward.",
     attach: "Spinous processes of T2 to T5, to the inner edge of the shoulder blade below its spine.",
     nerve: "Dorsal scapular nerve (C4 and C5).",
+    ppl: "pull",
     pain: "A nagging ache between the shoulder blades, close to the inner edge of the blade. Sometimes with a crunching feeling when the shoulder moves.",
     triggers: "Rounded shoulders, long periods leaning forward, heavy rowing or pulling when unaccustomed.",
     check: "Press along the inner edge of the shoulder blade from the middle down. Tenderness there that eases when you pull the shoulders back points here.",
@@ -83,6 +93,7 @@ export const MUSCLES = [
     does: "Both sides together tip the head back. One side alone turns and tilts the head to its own side.",
     attach: "Ligament at the back of the neck and spinous processes of C7 to T3, to the mastoid process behind the ear.",
     nerve: "Posterior rami of the middle cervical nerves.",
+    ppl: null,
     pain: "Refers to the very top of the head. Locally, an ache at the back and side of the upper neck.",
     triggers: "Head held forward or turned for long periods, whiplash, a draught on the neck.",
     check: "Turn your head against the resistance of your own hand on your temple. Pain at the back of the neck on the side you're turning towards suggests splenius.",
@@ -94,6 +105,7 @@ export const MUSCLES = [
     does: "Extends the neck, and turns and tilts it to the same side.",
     attach: "Spinous processes of T3 to T6, to the transverse processes of C1 to C3.",
     nerve: "Posterior rami of the lower cervical nerves.",
+    ppl: null,
     pain: "A diffuse ache through the neck that can refer through the head to behind the eye, and to the angle of the neck. Often part of a stiff neck with limited turning.",
     triggers: "Forward-head posture, looking up or to one side for long periods.",
     check: "Drop your chin and turn your head away from the sore side. A pull deep at the side and back of the neck is this muscle on stretch.",
@@ -105,6 +117,7 @@ export const MUSCLES = [
     does: "The strongest muscle for tipping the head back, and the one that holds it up when it sits forward of the shoulders.",
     attach: "Transverse processes of C7 to T6, to the back of the skull between the nuchal lines.",
     nerve: "Posterior rami of the cervical nerves. The greater occipital nerve passes through it.",
+    ppl: null,
     pain: "A band of pain around the head towards the temple, and an ache at the back of the skull. Tightness around the greater occipital nerve can add tingling over the scalp.",
     triggers: "Forward-head posture, reading in bed propped on pillows, looking up for long periods.",
     check: "Press the thick column of muscle one finger-width from the midline just below the skull. If it's tender and tipping the head back against your hand brings on the ache, this is a likely source.",
@@ -116,6 +129,7 @@ export const MUSCLES = [
     does: "Extends the neck and steadies it from underneath. It anchors on C2, so it controls the neck's curve.",
     attach: "Transverse processes of T1 to T6, to the spinous processes of C2 to C5.",
     nerve: "Posterior rami of the cervical nerves.",
+    ppl: null,
     pain: "A deep, central ache at the back of the neck up to the base of the skull. Studies of long-standing neck pain show this muscle working less well.",
     triggers: "Sustained looking down, whiplash, any long period of neck pain.",
     check: "Hard to feel directly. A deep ache that comes on after 10 to 20 minutes of looking down, and eases when you support your head, fits.",
@@ -127,6 +141,7 @@ export const MUSCLES = [
     does: "Four small muscles each side that fine-tune nodding and turning at the top two joints of the neck. The model shows two: rectus capitis posterior major and minor.",
     attach: "C1 and C2, to the underside of the back of the skull.",
     nerve: "Suboccipital nerve (posterior ramus of C1).",
+    ppl: null,
     pain: "A deep headache at the base of the skull that spreads forward in a band to the eye or forehead. It feels inside the head and is hard to pin to one spot.",
     triggers: "Chin poked forward towards a screen, varifocal glasses, looking up for long periods, eye strain.",
     check: "Press up under the edge of the skull, two finger-widths either side of the midline. If it's tender and brings on your headache, and a small nod feels stiff, these are involved.",
@@ -138,6 +153,7 @@ export const MUSCLES = [
     does: "One side turns the head to the opposite side and tilts it to its own side. Both together pull the head forward and bend the neck.",
     attach: "Top of the breastbone and inner third of the collarbone, to the mastoid process behind the ear.",
     nerve: "Accessory nerve (CN XI), with C2 and C3.",
+    ppl: null,
     pain: "It rarely hurts in the neck itself. It refers to the forehead, around the eye, the cheek, the ear and the top of the head, and can come with a vague unsteady feeling.",
     triggers: "Forward-head posture, sleeping face down with the head turned, whiplash, breathing with the neck instead of the diaphragm.",
     check: "Turn your head away and gently pinch the muscle between finger and thumb (don't press into the neck). Tenderness that brings on face or head pain points here.",
@@ -149,6 +165,7 @@ export const MUSCLES = [
     does: "Bend the neck to the side and lift the top two ribs when you breathe in. The nerves and artery to the arm pass between the front and middle scalene.",
     attach: "Transverse processes of C2 to C7, to the first and second ribs.",
     nerve: "Anterior rami of C3 to C8.",
+    ppl: null,
     pain: "Seldom felt in the neck. It refers to the chest, the shoulder, the inner edge of the shoulder blade and down the arm to the thumb and index finger.",
     triggers: "Upper-chest breathing, a long cough, carrying heavy loads, whiplash, forward-head posture.",
     check: "Tilt your ear to the opposite shoulder. A pull low at the side and front of the neck is the scalenes. If tingling in the arm changes with neck position, get it assessed.",
@@ -160,6 +177,7 @@ export const MUSCLES = [
     does: "Lie flat against the front of the spine and support the neck like a corset. They nod the head and flatten the neck's curve.",
     attach: "Fronts of the vertebrae from C1 to T3, and from C3 to C6 up to the base of the skull.",
     nerve: "Anterior rami of C1 to C6.",
+    ppl: null,
     pain: "Rarely painful themselves. In most people with ongoing neck pain they're weak or slow to switch on, which leaves the sternocleidomastoid and scalenes to do the work.",
     triggers: "Any long period of neck pain, forward-head posture, whiplash.",
     check: "Lie on your back, tuck your chin and lift your head 2 cm. If the chin pokes forward or you shake within 20 seconds, endurance is low. Around 30 to 40 seconds is typical.",
@@ -171,6 +189,7 @@ export const MUSCLES = [
     does: "Starts the arm lifting out to the side and holds the ball of the shoulder in its socket.",
     attach: "Hollow above the spine of the shoulder blade, to the top of the greater tubercle of the humerus.",
     nerve: "Suprascapular nerve (C5 and C6).",
+    ppl: null,
     pain: "A deep ache at the outer shoulder that can run down the outer arm. Lifting the arm out to the side hurts through the middle of the arc, and lying on that side is sore.",
     triggers: "Repeated reaching overhead, carrying heavy bags with the arm hanging, a fall onto the arm.",
     check: "Lift the arm out to the side. Pain between roughly 60 and 120 degrees that eases higher up suggests supraspinatus.",
@@ -182,6 +201,7 @@ export const MUSCLES = [
     does: "Rotates the arm outward and steadies the ball of the shoulder.",
     attach: "Back of the shoulder blade below its spine, to the middle of the greater tubercle of the humerus.",
     nerve: "Suprascapular nerve (C5 and C6).",
+    ppl: null,
     pain: "Felt deep in the front of the shoulder and down the outer arm, with an ache along the inner edge of the shoulder blade. Reaching behind your back is hard and sleeping on either side is uncomfortable.",
     triggers: "Long spells with the arm held forward (mouse, driving), throwing, pulling.",
     check: "Press the flat of the shoulder blade below its ridge. A tender spot that sends an ache to the front of the shoulder points here.",
@@ -193,6 +213,7 @@ export const MUSCLES = [
     does: "Three columns either side of the spine that hold you upright and arch the back. One side alone bends the trunk sideways.",
     attach: "From the pelvis and lower spine up to the ribs, the thoracic and cervical vertebrae, and the mastoid process.",
     nerve: "Posterior rami of the spinal nerves at each level.",
+    ppl: "pull",
     pain: "An ache beside the spine in the upper and mid back, with stiffness after sitting. A stiff upper back makes the neck bend and turn further to compensate.",
     triggers: "Slumped sitting, long drives, little movement through the day.",
     check: "Sit on a chair and arch your upper back over the backrest. If it feels blocked, and there are tender ropey bands two finger-widths from the spine, these are involved.",
@@ -341,12 +362,16 @@ export const EXERCISE_INFO = {
     steps: ["Stand tall with a weight in each hand, arms relaxed.", "Lift both shoulders straight up towards your ears.", "Pause at the top.", "Lower over three seconds."],
     feel: "The top of the shoulders working. A loaded muscle copes better than a rested one.",
     ease: "Straight up and down, no rolling. Keep the chin back.",
+    targets: ["upper-trapezius", "levator-scapulae"],
+    also: ["rhomboid-minor", "forearm-flexors"],
   },
   "band-row": {
     name: "Band row", type: "Strength", kit: "Resistance band", dose: "3 sets of 12",
     steps: ["Anchor the band at chest height and stand tall, arms out in front.", "Draw your elbows straight back, close to your ribs.", "Squeeze your shoulder blades together and pause.", "Let the arms go forward under control."],
     feel: "The muscles between the shoulder blades.",
     ease: "Shoulders stay down away from the ears. Don't lean back to finish the pull.",
+    targets: ["middle-trapezius", "rhomboid-major", "rhomboid-minor", "deltoid-posterior"],
+    also: ["latissimus-dorsi", "lower-trapezius", "teres-major", "biceps-brachii"],
   },
   "prone-t": {
     name: "Prone T raise", type: "Strength", kit: "Mat", dose: "3 sets of 10, 2 second hold",
@@ -413,3 +438,12 @@ export const RED_FLAGS = [
   "Fever, feeling unwell, or unexplained weight loss with the pain",
   "Pain that wakes you at night or isn't easing after three or four weeks",
 ];
+
+// ---- merge in the rest of the body; anything declared above belongs to the neck region ----
+for (const g of GROUPS) g.region = "neck";
+for (const p of PATTERNS) p.region = "neck";
+GROUPS.push(...BODY_GROUPS);
+MUSCLES.push(...BODY_MUSCLES);
+PATTERNS.push(...BODY_PATTERNS);
+Object.assign(EXERCISE_INFO, BODY_EXERCISES);
+for (const m of MUSCLES) m.region = GROUPS.find((g) => g.id === m.group).region;

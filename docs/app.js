@@ -1,39 +1,108 @@
-// Page logic: panel views, navigation, and the wiring between the panel and the two 3D scenes.
-// The panel renders from content.js alone, so it still works if WebGL or the model fails to load.
-import { GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "./content.js";
+// Page logic: two ways in (pain and stretch, region by region; strength, by training day), the panel views,
+// navigation, lazy loading of each region's muscles, and the wiring between the panel and the two 3D scenes.
+// The panel renders from content.js alone, so it still works if WebGL or a download fails.
+import { REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "./content.js";
+import { STRENGTH_NOTE } from "./content-body.js";
 
 const $ = (id) => document.getElementById(id);
 const panel = $("panel"), stage = $("stage"), canvas = $("gl");
 const LAYER_HEX = { 1: "#b44a40", 2: "#a23c38", 3: "#8f3436", 4: "#7c2d35" };
 const HEAT_HEX = ["#e89a10", "#e2861c", "#da7422", "#d06226", "#c5532a", "#b9472c"];
-const VIEW_HINT = { "sternocleidomastoid": "frontLeft", "scalenes": "frontLeft", "deep-neck-flexors": "front", "suboccipitals": "backHigh", "supraspinatus": "backHigh" };
-const XRAY = new Set(["deep-neck-flexors"]);
+// The side of the model that shows a muscle best when it's picked from the panel. Anything not listed is seen from behind.
+const VIEW_HINT = {
+  "sternocleidomastoid": "frontLeft", "scalenes": "frontLeft", "deep-neck-flexors": "front", "suboccipitals": "backHigh", "supraspinatus": "backHigh",
+  "rectus-abdominis": "front", "external-oblique": "frontLeft", "internal-oblique": "frontLeft", "transversus-abdominis": "frontLeft", "iliopsoas": "front",
+  "pectoralis-major": "front", "pectoralis-minor": "front", "serratus-anterior": "left", "subscapularis": "front", "coracobrachialis": "front",
+  "deltoid-anterior": "frontLeft", "deltoid-middle": "left", "biceps-brachii": "frontLeft", "brachialis": "frontLeft", "brachioradialis": "frontLeft", "forearm-flexors": "front",
+  "tensor-fasciae-latae": "frontLeft", "adductors": "front",
+  "rectus-femoris": "front", "vasti": "frontLeft", "sartorius": "frontLeft", "tibialis-anterior": "frontLeft", "fibulares": "left",
+};
+// deep muscles hidden behind bone from every side: the bones turn see-through when these are selected
+const XRAY = new Set(["deep-neck-flexors", "iliopsoas", "subscapularis"]);
+const REGION_VIEW = { shoulder: "front", leg: "front" };   // camera side when a region opens; default from behind
+const DAY_VIEW = { pull: "back", push: "front", legs: "back" };   // the side a day's main muscles sit on
+const MOVE_HINT = "Drag to rotate, scroll to zoom, click a muscle";
 
-const M = Object.fromEntries(MUSCLES.map((m) => [m.id, m]));
-const Gp = Object.fromEntries(GROUPS.map((g) => [g.id, g]));
-const Pt = Object.fromEntries(PATTERNS.map((p) => [p.id, p]));
+const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
+const M = byId(MUSCLES), Gp = byId(GROUPS), Pt = byId(PATTERNS), R = byId(REGIONS), D = byId(STRENGTH);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const uniq = (a) => [...new Set(a)];
+const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const ICON = {
   back: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.5 2.5 4 7l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   play: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.2v9.6L10.6 6z" fill="currentColor"/></svg>',
   pause: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.5h2.4v9H2.5zM7.1 1.5h2.4v9H7.1z" fill="currentColor"/></svg>',
+  next: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M5.5 2.5 10 7l-4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
+// ---------- content helpers ----------
+// a lift is anything on a strength day: the new lifts, plus the neck exercises and plank the days reuse
+const DAY_EX = new Set(STRENGTH.flatMap((d) => d.exercises));
+const isLift = (id) => EXERCISE_INFO[id].mode === "strength" || DAY_EX.has(id);
+/** the muscles an exercise works: its own targets when it names them; otherwise the muscles that prescribe it */
+function worksOn(id) {
+  const e = EXERCISE_INFO[id];
+  if (e.targets) {
+    const main = (e.targets || []).filter((m) => M[m]);
+    return { main, also: (e.also || []).filter((m) => M[m] && !main.includes(m)) };
+  }
+  return { main: MUSCLES.filter((m) => m.exercises.includes(id)).map((m) => m.id), also: [] };
+}
+/** strength lifts that train a muscle, main movers first */
+function liftsFor(mid) {
+  const lifts = Object.keys(EXERCISE_INFO).filter(isLift);
+  const main = lifts.filter((id) => worksOn(id).main.includes(mid));
+  return [...main.map((id) => ({ id, helper: false })), ...lifts.filter((id) => worksOn(id).also.includes(mid)).map((id) => ({ id, helper: true }))];
+}
+function dayMuscles(day) {
+  const main = uniq(day.exercises.flatMap((id) => worksOn(id).main));
+  return { main, also: uniq(day.exercises.flatMap((id) => worksOn(id).also)).filter((m) => !main.includes(m)) };
+}
+const regionsOf = (ids) => uniq(ids.filter((id) => M[id]).map((id) => M[id].region));
+// every region with a muscle that strength mode shows; strength mode loads these up front
+const STRENGTH_REGIONS = regionsOf(STRENGTH.flatMap((d) => { const x = dayMuscles(d); return [...x.main, ...x.also]; }));
+
 // ---------- navigation ----------
-const nav = [{ view: "home" }];
-const cur = () => nav[nav.length - 1];
+// Each mode keeps its own back stack, so switching mode and back returns you where you were.
+// In pain mode every entry carries the region it belongs to, so Back also restores the region.
+let mode = "pain";
+const navs = { pain: [{ view: "home", region: REGIONS[0].id }], strength: [{ view: "home" }] };
+const nav = () => navs[mode];
+const cur = () => nav()[nav().length - 1];
+function regionFor(view, id) {
+  if (view === "muscle") return M[id].region;
+  if (view === "group") return Gp[id].region;
+  if (view === "pattern") return Pt[id].region;
+  return cur().region;
+}
 function go(view, id, extra = {}) {
+  if (view === "day" && mode !== "strength") setMode("strength", false);   // days only exist in strength mode
   const top = cur();
   if (top.view === view && top.id === id) return;
-  nav.push({ view, id, ...extra });
+  nav().push({ view, id, region: regionFor(view, id), ...extra });
   render();
 }
 function back() {
-  if (nav.length > 1) nav.pop();
+  if (nav().length > 1) nav().pop();
   render();
 }
 function home() {
-  nav.length = 1;
+  // back to the home of the region in view, which may not be the one you started in
+  const region = cur().region;
+  nav().length = 1;
+  if (mode === "pain") nav()[0].region = region;
+  render();
+}
+function setMode(m, draw = true) {
+  if (m !== "pain" && m !== "strength") return;
+  mode = m;
+  setPressed(document.querySelector(".modes"), "mode", m);
+  if (draw) render();
+}
+function setRegion(id) {
+  if (!R[id]) return;
+  if (mode !== "pain") setMode("pain", false);
+  navs.pain = [{ view: "home", region: id }];
   render();
 }
 
@@ -41,38 +110,90 @@ function home() {
 const sec = (title, body) => `<section class="sec"><h3>${title}</h3>${body}</section>`;
 const backBtn = (label) => `<button class="back" data-act="back">${ICON.back}${esc(label)}</button>`;
 const muscleRow = (m) => `<li><button class="row" data-go="muscle" data-id="${m.id}"><span class="dot" style="background:${LAYER_HEX[m.layer]}"></span><span class="n">${esc(m.name)}</span><span class="l">${esc(m.latin)}</span></button></li>`;
-const exCard = (id) => {
+const chipList = (ids, cls = "chip") => `<div class="chips">${ids.map((id) => `<button class="${cls}" data-go="muscle" data-id="${id}">${esc(M[id].name)}</button>`).join("")}</div>`;
+const exCard = (id, pill) => {
   const e = EXERCISE_INFO[id];
-  return `<li><button class="ex" data-go="exercise" data-id="${id}"><span class="play">${ICON.play}</span><span><span class="n">${esc(e.name)}</span><span class="d">${esc(e.dose)}</span></span><span class="pill">${esc(e.type)}</span></button></li>`;
+  return `<li><button class="ex" data-go="exercise" data-id="${id}"><span class="play">${ICON.play}</span><span><span class="n">${esc(e.name)}</span><span class="d">${esc(e.dose)}</span></span><span class="pill">${esc(pill || e.type)}</span></button></li>`;
 };
+const exList = (ids) => `<ul class="stack">${ids.map((id) => exCard(id)).join("")}</ul>`;
+const liftList = (lifts) => `<ul class="stack">${lifts.map((l) => exCard(l.id, l.helper ? "Helper" : null)).join("")}</ul>`;
+const NOT_READY = `<p class="note">Pain notes and stretches for this region are still being written.</p>`;
+const facts = (m) => `<dl class="facts"><dt>Attaches</dt><dd>${esc(m.attach)}</dd><dt>Nerve</dt><dd>${esc(m.nerve)}</dd></dl>`;
+
 function backLabel() {
-  const prev = nav[nav.length - 2];
-  if (!prev || prev.view === "home") return "All muscles";
+  const prev = nav()[nav().length - 2];
+  if (!prev) return "Back";
+  if (prev.view === "home") return mode === "pain" ? R[prev.region].name : "Strength days";
   if (prev.view === "muscle") return M[prev.id].name;
   if (prev.view === "group") return Gp[prev.id].name;
   if (prev.view === "pattern") return Pt[prev.id].name;
+  if (prev.view === "day") return `${D[prev.id].name} day`;
   if (prev.view === "exercise") return EXERCISE_INFO[prev.id].name;
   return "Back";
 }
 
-function viewHome() {
-  const chips = (kind) => PATTERNS.filter((p) => p.kind === kind).map((p) => `<button class="chip" data-go="pattern" data-id="${p.id}">${esc(p.name)}</button>`).join("");
-  const groups = GROUPS.map((g) => {
-    const ms = MUSCLES.filter((m) => m.group === g.id);
-    return `<div class="group"><button class="group-btn" data-go="group" data-id="${g.id}"><span>${esc(g.name)}</span><span>Show group</span></button><ul>${ms.map(muscleRow).join("")}</ul></div>`;
-  }).join("");
+function groupBlock(g) {
+  const ms = MUSCLES.filter((m) => m.group === g.id);
+  return `<div class="group"><button class="group-btn" data-go="group" data-id="${g.id}"><span>${esc(g.name)}</span><span>Show group</span></button><ul>${ms.map(muscleRow).join("")}</ul></div>`;
+}
+function regionPicker(current) {
+  const b = (r) => `<button class="region" data-region="${r.id}" aria-pressed="${r.id === current}">${esc(r.name)}</button>`;
+  return `<nav class="regions" aria-label="Body region">${REGIONS.map(b).join("")}</nav>`;
+}
+function flags(r) {
+  const list = r.flags || RED_FLAGS;
+  return `<section class="flags"><h3>See a GP or physio first if you have</h3><ul>${list.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></section>`;
+}
+const CREDIT = `<p class="fine">Anatomy meshes: BodyParts3D, © The Database Center for Life Science, licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en">CC BY-SA 2.1 Japan</a>. Meshes were cropped, simplified and rigged for this page, and the adapted model is shared under the same licence.</p>`;
+
+function viewPainHome(r) {
+  const pats = PATTERNS.filter((p) => p.region === r.id);
+  const chips = (kind) => pats.filter((p) => p.kind === kind).map((p) => `<button class="chip" data-go="pattern" data-id="${p.id}">${esc(p.name)}</button>`).join("");
+  const finder = ["where", "when"].map((k) => chips(k) && sec(k === "where" ? "Where it hurts" : "When it hurts", `<div class="chips">${chips(k)}</div>`)).join("");
+  const groups = GROUPS.filter((g) => g.region === r.id).map(groupBlock).join("");
   return `<div class="pad">
-    <div class="head"><p class="lede">Click a muscle on the model, or start from the pain. Each muscle comes with a quick check and two or three exercises you can watch in 3D.</p></div>
-    ${sec("Where it hurts", `<div class="chips">${chips("where")}</div>`)}
-    ${sec("When it hurts", `<div class="chips">${chips("when")}</div>`)}
+    ${regionPicker(r.id)}
+    <div class="head"><span class="eyebrow">Pain and stretch</span><h2 class="title">${esc(r.name)}</h2></div>
+    ${r.ready
+      ? `<p class="lede">Click a muscle on the model, or start from the pain. Each muscle comes with a quick check and exercises you can watch in 3D.</p>`
+      : NOT_READY}
+    ${r.ready ? finder : ""}
     ${sec("Muscles", `<div class="stack">${groups}</div>`)}
-    ${flags()}
-    <p class="fine">This atlas covers muscular sources of neck and upper back pain. It can't examine you, and joints, discs and nerves cause neck pain too.</p>
-    <p class="fine">Anatomy meshes: BodyParts3D, © The Database Center for Life Science, licensed under <a href="https://creativecommons.org/licenses/by-sa/2.1/jp/deed.en">CC BY-SA 2.1 Japan</a>. Meshes were cropped, simplified and rigged for this page, and the adapted model is shared under the same licence.</p>
+    ${r.ready ? flags(r) : ""}
+    <p class="fine">This atlas covers muscular sources of pain. It can't examine you, and joints, discs and nerves cause pain too.</p>
+    ${CREDIT}
   </div>`;
 }
-function flags() {
-  return `<section class="flags"><h3>See a GP or physio first if you have</h3><ul>${RED_FLAGS.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></section>`;
+
+function viewStrengthHome() {
+  const card = (d) => {
+    const { main } = dayMuscles(d);
+    return `<li><button class="day" data-go="day" data-id="${d.id}">
+      <span class="day-top"><span class="day-n">${esc(d.name)}</span><span class="day-m">${count(d.exercises.length, "lift")}, ${count(main.length, "muscle")}</span></span>
+      <span class="d">${esc(d.blurb)}</span>
+      <span class="go">${ICON.next}</span></button></li>`;
+  };
+  return `<div class="pad">
+    <div class="head"><span class="eyebrow">Strength</span><h2 class="title">Three training days</h2></div>
+    <p class="lede">Between them, the three days train the whole body. Pick a day to see the muscles it works and its lifts.</p>
+    <ul class="stack">${STRENGTH.map(card).join("")}</ul>
+    <p class="note">${esc(STRENGTH_NOTE)}</p>
+    <p class="fine">Click a muscle on the model to see the lifts that train it.</p>
+    ${CREDIT}
+  </div>`;
+}
+
+function viewDay(d) {
+  const { main, also } = dayMuscles(d);
+  return `<div class="pad">
+    ${backBtn(backLabel())}
+    <div class="head"><span class="eyebrow">Strength day</span><h2 class="title">${esc(d.name)}</h2></div>
+    <p class="lede">${esc(d.blurb)}</p>
+    ${sec("Muscles it trains", chipList(main))}
+    ${also.length ? sec("Also works", chipList(also, "chip minor")) : ""}
+    ${sec("Lifts", exList(d.exercises))}
+    <p class="fine">Pick a weight you can control for every rep. Sharp pain, tingling or dizziness means stop.</p>
+  </div>`;
 }
 
 function viewPattern(p) {
@@ -88,86 +209,216 @@ function viewPattern(p) {
 
 function viewGroup(g) {
   const ms = MUSCLES.filter((m) => m.group === g.id);
-  const ex = [...new Set(ms.flatMap((m) => m.exercises))];
+  const ex = uniq(ms.flatMap((m) => m.exercises));
+  const lifts = uniq(ms.flatMap((m) => liftsFor(m.id).filter((l) => !l.helper).map((l) => l.id)));
+  const exSec = ex.length ? sec("Exercises for the group", exList(ex)) : "";
+  const liftSec = lifts.length ? sec("Strength lifts for the group", exList(lifts)) : "";
   return `<div class="pad">
     ${backBtn(backLabel())}
     <div class="head"><span class="eyebrow">Muscle group</span><h2 class="title">${esc(g.name)}</h2></div>
     <p class="lede">${esc(g.blurb)}</p>
+    ${mode === "pain" && !R[g.region].ready ? NOT_READY : ""}
     ${sec("Muscles in this group", `<ul>${ms.map(muscleRow).join("")}</ul>`)}
-    ${sec("Exercises for the group", `<ul class="stack">${ex.map(exCard).join("")}</ul>`)}
+    ${mode === "strength" ? liftSec + exSec : exSec + liftSec}
   </div>`;
 }
 
 function viewMuscle(m) {
-  return `<div class="pad">
-    ${backBtn(backLabel())}
-    <div class="head">
+  // a lift the muscle already prescribes (shrug for the upper trapezius) is listed once: as a lift in
+  // strength mode, as an exercise in pain mode
+  const all = liftsFor(m.id);
+  const lifts = mode === "strength" ? all : all.filter((l) => !m.exercises.includes(l.id));
+  const rest = mode === "strength" ? m.exercises.filter((id) => !all.some((l) => l.id === id)) : m.exercises;
+  const head = `<div class="head">
       <button class="eyebrow" data-go="group" data-id="${m.group}">${esc(Gp[m.group].name)}</button>
       <h2 class="title">${esc(m.name)}</h2>
       <p class="latin">${esc(m.latin)}</p>
-    </div>
+    </div>`;
+  const liftSec = sec("Strength lifts that train it", lifts.length ? liftList(lifts) : `<p class="muted">None of the lifts in the three days work it directly.</p>`);
+  const does = sec("What it does", `<p>${esc(m.does)}</p>`);
+  const hasNotes = R[m.region].ready && m.pain;
+  if (mode === "strength") {
+    return `<div class="pad">${backBtn(backLabel())}${head}${does}${liftSec}
+      ${rest.length ? sec("Stretches and control work", exList(rest)) : ""}
+      ${facts(m)}
+      ${hasNotes ? `<button class="link" data-act="pain-notes" data-id="${m.id}">Sore? How it hurts and what helps${ICON.next}</button>` : ""}
+    </div>`;
+  }
+  if (!hasNotes) {
+    const note = R[m.region].ready ? `<p class="note">Pain notes for this muscle are still being written.</p>` : NOT_READY;
+    return `<div class="pad">${backBtn(backLabel())}${head}${note}${does}${liftSec}${m.exercises.length ? sec("Exercises", exList(m.exercises)) : ""}${facts(m)}</div>`;
+  }
+  return `<div class="pad">
+    ${backBtn(backLabel())}
+    ${head}
     ${sec("How it hurts", `<p>${esc(m.pain)}</p>`)}
     ${sec("What sets it off", `<p>${esc(m.triggers)}</p>`)}
     ${sec("Quick check", `<p>${esc(m.check)}</p>`)}
-    ${sec("Exercises", `<ul class="stack">${m.exercises.map(exCard).join("")}</ul>`)}
-    ${sec("What it does", `<p>${esc(m.does)}</p>`)}
-    <dl class="facts"><dt>Attaches</dt><dd>${esc(m.attach)}</dd><dt>Nerve</dt><dd>${esc(m.nerve)}</dd></dl>
+    ${m.exercises.length ? sec("Exercises", exList(m.exercises)) : ""}
+    ${lifts.length ? sec("Strength lifts that train it", liftList(lifts)) : ""}
+    ${does}
+    ${facts(m)}
   </div>`;
 }
 
 function viewExercise(id) {
   const e = EXERCISE_INFO[id];
-  const targets = MUSCLES.filter((m) => m.exercises.includes(id));
+  const { main, also } = worksOn(id);
+  const lift = isLift(id);
+  const works = lift
+    ? sec("Muscles it trains", chipList(main)) + (also.length ? sec("Helpers", chipList(also, "chip minor")) : "")
+    : sec("Works on", chipList(main));
   return `<div class="pad">
     ${backBtn(backLabel())}
-    <div class="head"><span class="eyebrow">${esc(e.type)} exercise</span><h2 class="title">${esc(e.name)}</h2></div>
+    <div class="head"><span class="eyebrow">${lift ? "Strength lift" : `${esc(e.type)} exercise`}</span><h2 class="title">${esc(e.name)}</h2></div>
     <div class="meta"><span><b>Dose</b> ${esc(e.dose)}</span><span><b>Kit</b> ${esc(e.kit)}</span></div>
     ${sec("How to do it", `<ol class="steps" id="steps">${e.steps.map((s) => `<li><span>${esc(s)}</span></li>`).join("")}</ol>`)}
     ${sec("What you should feel", `<p>${esc(e.feel)}</p>`)}
     ${sec("Get it right", `<p>${esc(e.ease)}</p>`)}
-    ${sec("Works on", `<div class="chips">${targets.map((m) => `<button class="chip" data-go="muscle" data-id="${m.id}">${esc(m.name)}</button>`).join("")}</div>`)}
-    <p class="fine">The skeleton shows one side, with the working muscle in teal. Repeat stretches on the other side. Mild stretch or effort is fine; sharp pain, tingling or dizziness means stop.</p>
+    ${works}
+    <p class="fine">${lift
+      ? "The muscles doing the work are lit in teal. Pick a weight you can control for every rep. Sharp pain, tingling or dizziness means stop."
+      : "The skeleton shows one side, with the working muscle in teal. Repeat stretches on the other side. Mild stretch or effort is fine; sharp pain, tingling or dizziness means stop."}</p>
   </div>`;
 }
 
-// ---------- scenes ----------
-let THREE = null, renderer = null, anatomy = null, figure = null;
-let mode = "anatomy", lastStep = -1, lastLabel = null;
+function viewFor(s) {
+  if (s.view === "home") return mode === "pain" ? viewPainHome(R[s.region]) : viewStrengthHome();
+  if (s.view === "day") return viewDay(D[s.id]);
+  if (s.view === "pattern") return viewPattern(Pt[s.id]);
+  if (s.view === "group") return viewGroup(Gp[s.id]);
+  if (s.view === "muscle") return viewMuscle(M[s.id]);
+  return viewExercise(s.id);
+}
+
+// ---------- region loading ----------
+let THREE = null, renderer = null, anatomy = null, figure = null, unpack = null, MOVES = {}, failed = false;
+const loaded = new Set(), loading = new Map();   // region id -> promise
+
+/** fetch a region's muscle file once and add its muscles to both scenes */
+function loadRegion(r) {
+  if (!loading.has(r)) {
+    const p = (async () => {
+      const res = await fetch(`./muscles-${r}.json`);
+      if (!res.ok) throw new Error(`muscles-${r}.json: ${res.status}`);
+      const doc = await res.json(), buf = unpack(doc);
+      anatomy.addMuscles(doc.parts, buf, r);
+      figure.addMuscles(doc.parts, buf, r);
+      loaded.add(r);
+    })();
+    p.catch(() => loading.delete(r));   // let a later visit try again
+    loading.set(r, p);
+  }
+  return loading.get(r);
+}
+const ensure = (list) => Promise.all(list.map(loadRegion));
+
+// ---------- stage ----------
+let scene = "anatomy", lastStep = -1, lastLabel = null, syncToken = 0;
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function setPressed(container, attr, value) {
+  if (!container) return;
   for (const b of container.querySelectorAll(`[data-${attr}]`)) b.setAttribute("aria-pressed", String(b.dataset[attr] === String(value)));
+}
+function stageMsg(text, loadingNow = false) {
+  const el = $("stage-msg");
+  el.classList.toggle("loading", loadingNow);
+  el.innerHTML = text ? `<div>${esc(text)}</div>` : "";
+}
+
+/** the camera side for a set of muscles: from the front when most of them are on the front of the body */
+function sideFor(ids, fallback) {
+  if (ids.length === 1) return VIEW_HINT[ids[0]] || "back";
+  const front = ids.filter((id) => /^front/.test(VIEW_HINT[id] || "")).length;
+  return ids.length && front * 2 > ids.length ? "front" : fallback;
+}
+/** the muscles to light on the exercise figure: just the muscle you came from, or all the main ones */
+function figureTargets(s) {
+  const { main, also } = worksOn(s.id);
+  const prev = nav()[nav().length - 2];
+  if (prev && prev.view === "muscle" && (main.includes(prev.id) || also.includes(prev.id))) return [prev.id];
+  return main;
+}
+
+/**
+ * What the stage shows for a nav entry: `show` is the regions whose muscles are visible (null = whole body),
+ * `need` the regions that must be loaded first, `ids` the muscles to select.
+ */
+function stageSpec(s) {
+  const strength = mode === "strength";
+  const base = strength ? null : [s.region];
+  let ids = [], ranked = false, title = "", sub = MOVE_HINT, view, fig = null, wide = false;
+  const fallback = strength ? "front" : REGION_VIEW[s.region] || "back";
+  if (s.view === "home") { title = strength ? "Whole body" : R[s.region].name; view = fallback; }
+  else if (s.view === "pattern") { ids = Pt[s.id].muscles.map((x) => x.id); ranked = true; title = Pt[s.id].name; sub = "Likely muscles, brightest first"; view = sideFor(ids, "back"); }
+  else if (s.view === "group") { ids = MUSCLES.filter((m) => m.group === s.id).map((m) => m.id); title = Gp[s.id].name; sub = count(ids.length, "muscle"); view = sideFor(ids, fallback); }
+  else if (s.view === "muscle") { ids = [s.id]; title = M[s.id].name; sub = M[s.id].latin; view = sideFor(ids); }
+  else if (s.view === "day") { ids = dayMuscles(D[s.id]).main; title = `${D[s.id].name} day`; sub = `Trains ${count(ids.length, "muscle")}`; view = DAY_VIEW[s.id] || "back"; wide = true; }
+  else if (s.view === "exercise") {
+    const w = worksOn(s.id);
+    fig = figureTargets(s);
+    ids = [...w.main, ...w.also];
+    title = EXERCISE_INFO[s.id].name;
+    sub = "No animation for this one yet. The steps are in the panel.";
+    view = sideFor(w.main, fallback);
+  }
+  const show = base && uniq([...base, ...regionsOf(ids)]);
+  const need = uniq([...(show || STRENGTH_REGIONS), ...regionsOf(ids)]);
+  return { ids, ranked, title, sub, view, show, need, fig, wide };
+}
+
+function setScene(next) {
+  scene = next;
+  $("tools-anatomy").hidden = scene !== "anatomy";
+  $("tools-figure").hidden = scene !== "figure";
+  anatomy.controls.enabled = scene === "anatomy";
+  anatomy.setRulerVisible(scene === "anatomy");
+  anatomy.invalidate();
+  figure.controls.enabled = scene === "figure";
+  if (scene === "anatomy") $("phase").textContent = "";
+}
+
+/** tell the atlas how much of the canvas the title and the controls cover, so framing keeps clear of them */
+function measureInsets() {
+  if (!anatomy || scene !== "anatomy") return;
+  const st = stage.getBoundingClientRect();
+  const title = $("stage-title").parentElement.getBoundingClientRect();
+  const tools = $("tools-anatomy").getBoundingClientRect();
+  anatomy.setInsets(Math.round(title.bottom - st.top + 6), Math.round(st.bottom - tools.top + 6));
 }
 
 function render() {
-  const s = cur();
-  const html = s.view === "home" ? viewHome() : s.view === "pattern" ? viewPattern(Pt[s.id]) : s.view === "group" ? viewGroup(Gp[s.id]) : s.view === "muscle" ? viewMuscle(M[s.id]) : viewExercise(s.id);
-  panel.innerHTML = html;
+  panel.innerHTML = viewFor(cur());
   panel.scrollTop = 0;
   syncStage();
 }
 
 function syncStage() {
-  const s = cur();
-  const wantFigure = s.view === "exercise" && figure;
-  mode = wantFigure ? "figure" : "anatomy";
-  $("tools-anatomy").hidden = mode !== "anatomy" || !anatomy;
-  $("tools-figure").hidden = mode !== "figure";
+  const s = cur(), spec = stageSpec(s), token = ++syncToken;
   $("tip").classList.remove("on");
-  $("stage-msg").hidden = mode === "figure";
-  if (anatomy) { anatomy.controls.enabled = mode === "anatomy"; anatomy.setRulerVisible(mode === "anatomy"); anatomy.invalidate(); }
-  if (figure) figure.controls.enabled = mode === "figure";
+  $("stage-title").textContent = spec.title;
+  if (!anatomy) { $("stage-sub").textContent = ""; return; }   // no 3D: the panel carries on alone
+  const missing = spec.need.filter((r) => !loaded.has(r));
+  if (missing.length) {
+    // keep the last picture up with a note over it; draw the new view once the muscles arrive
+    $("stage-sub").textContent = "";
+    stageMsg(missing.length === 1 ? `Loading ${R[missing[0]].name.toLowerCase()}…` : "Loading muscles…", true);
+    ensure(missing).then(
+      () => { if (token === syncToken) syncStage(); },
+      (e) => { console.warn(e); if (token === syncToken) stageMsg("These muscles couldn't load. The notes in the panel still work."); },
+    );
+    return;
+  }
+  if (!failed) stageMsg(null);
 
-  if (mode === "figure") {
-    const e = EXERCISE_INFO[s.id];
-    $("stage-title").textContent = e.name;
-    $("stage-sub").textContent = e.dose;
-    // opened from a muscle's page: that muscle gets the strongest highlight
-    const prev = nav[nav.length - 2];
-    const focus = prev && prev.view === "muscle" && M[prev.id].exercises.includes(s.id) ? prev.id : null;
-    if (figure.loaded !== s.id + ":" + focus) {
-      figure.load(s.id, focus);
-      figure.loaded = s.id + ":" + focus;
+  if (s.view === "exercise" && MOVES[s.id]) {
+    setScene("figure");
+    $("stage-sub").textContent = EXERCISE_INFO[s.id].dose;
+    const key = s.id + ":" + spec.fig.join(",");
+    if (figure.loaded !== key) {
+      figure.load(s.id, spec.fig);
+      figure.loaded = key;
       figure.setPlaying(!reduced);
       syncViewButtons();
     }
@@ -175,26 +426,27 @@ function syncStage() {
     updatePlayBtn();
     return;
   }
-  $("phase").textContent = "";
-  let title = "", sub = "Drag to rotate, scroll to zoom, click a muscle";
-  let ids = [], ranked = false;
-  if (s.view === "pattern") { ids = Pt[s.id].muscles.map((x) => x.id); ranked = true; title = Pt[s.id].name; sub = "Likely muscles, brightest first"; }
-  else if (s.view === "group") { ids = MUSCLES.filter((m) => m.group === s.id).map((m) => m.id); title = Gp[s.id].name; sub = ids.length + " muscles"; }
-  else if (s.view === "muscle") { ids = [s.id]; title = M[s.id].name; sub = M[s.id].latin; }
-  else if (s.view === "exercise") title = EXERCISE_INFO[s.id].name;
-  $("stage-title").textContent = title;
-  $("stage-sub").textContent = anatomy ? sub : "";
-  $("clear-wrap").hidden = ids.length === 0;
-  if (anatomy) {
-    const key = s.view + ":" + (s.id || "");
-    if (anatomy.shown !== key) {
-      anatomy.shown = key;
-      // a muscle clicked on the model is already in view, so keep the angle; from the panel, turn to its best side
-      const view = !ids.length || s.from === "model" ? "keep" : (ids.length === 1 && VIEW_HINT[ids[0]]) || "back";
-      const d = anatomy.select(ids, ranked, view);
-      setPressed($("tools-anatomy"), "depth", d);
-      if (view !== "keep") setPressed($("tools-anatomy"), "view", view);
-    }
+  // everything else, including an exercise with no animation yet, shows its muscles on the atlas
+  setScene("anatomy");
+  figure.loaded = null;
+  $("stage-sub").textContent = spec.sub;
+  $("clear-wrap").hidden = spec.ids.length === 0;
+  measureInsets();
+  const regionKey = spec.show ? spec.show.slice().sort().join(",") : "*";
+  const regionChanged = anatomy.regionKey !== regionKey;
+  if (regionChanged) {
+    anatomy.setRegions(spec.show, anatomy.regionKey === undefined ? 0 : undefined);
+    anatomy.regionKey = regionKey;
+  }
+  const key = mode + "|" + s.view + ":" + (s.id || "");
+  if (regionChanged || anatomy.shown !== key) {
+    anatomy.shown = key;
+    // a muscle clicked on the model is already in view, so keep the angle; going back to a list keeps it too
+    const keep = s.from === "model" || (!spec.ids.length && !regionChanged);
+    const view = keep ? "keep" : spec.view;
+    const d = anatomy.select(spec.ids, spec.ranked, view, spec.wide);
+    setPressed($("tools-anatomy"), "depth", d);
+    setPressed($("tools-anatomy"), "view", keep ? "" : view);
   }
 }
 
@@ -230,11 +482,19 @@ document.addEventListener("click", (ev) => {
   if (!t) return;
   const d = t.dataset;
   if (d.go) return go(d.go, d.id);
+  if (d.mode) return mode === d.mode ? undefined : setMode(d.mode);
+  if (d.region) return setRegion(d.region);
   if (d.act === "back") return back();
   if (d.act === "clear") return home();
+  if (d.act === "pain-notes") {
+    // from a muscle in strength mode to the same muscle in pain mode, on top of whatever pain mode had open
+    setMode("pain", false);
+    navs.pain.push({ view: "muscle", id: d.id, region: M[d.id].region });
+    return render();
+  }
   if (d.act === "to-model") {
     // return to the muscle (or wherever) the exercise was opened from
-    while (nav.length > 1 && cur().view === "exercise") nav.pop();
+    while (nav().length > 1 && cur().view === "exercise") nav().pop();
     return render();
   }
   if (d.act === "play" && figure) { figure.setPlaying(!figure.isPlaying()); return updatePlayBtn(); }
@@ -244,13 +504,13 @@ document.addEventListener("click", (ev) => {
   if (d.depth && anatomy) { anatomy.setDepth(Number(d.depth)); return setPressed($("tools-anatomy"), "depth", d.depth); }
 });
 document.addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && nav.length > 1) back();
+  if (ev.key === "Escape" && nav().length > 1) back();
 });
 
 let down = null;
 canvas.addEventListener("pointerdown", (ev) => { down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; if (anatomy) anatomy.cancelTween(); });
 canvas.addEventListener("pointerup", (ev) => {
-  if (!down || mode !== "anatomy" || !anatomy) return;
+  if (!down || scene !== "anatomy" || !anatomy) return;
   const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y);
   const quick = performance.now() - down.t < 600;
   down = null;
@@ -260,7 +520,7 @@ canvas.addEventListener("pointerup", (ev) => {
 });
 let hoverQueued = null;
 canvas.addEventListener("pointermove", (ev) => {
-  if (mode !== "anatomy" || !anatomy || ev.pointerType !== "mouse" || ev.buttons) return;
+  if (scene !== "anatomy" || !anatomy || ev.pointerType !== "mouse" || ev.buttons) return;
   hoverQueued = { x: ev.clientX, y: ev.clientY };
 });
 canvas.addEventListener("pointerleave", () => { hoverQueued = null; $("tip").classList.remove("on"); if (anatomy) anatomy.hover(null); canvas.style.cursor = ""; });
@@ -287,8 +547,12 @@ function isDark() {
   return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
 }
 function fail(msg) {
-  $("stage-msg").innerHTML = `<div>${esc(msg)}</div>`;
+  failed = true;
+  anatomy = null;
+  stageMsg(msg);
   $("tools-anatomy").hidden = true;
+  $("tools-figure").hidden = true;
+  $("stage-sub").textContent = "";
 }
 
 async function boot() {
@@ -309,23 +573,25 @@ async function boot() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  $("stage-msg").innerHTML = "<div>Loading the 3D model…</div>";
+  stageMsg("Loading the 3D model…", true);
   try {
+    // only the skeleton up front; each region's muscles follow when a view first needs them
     const res = await fetch("./model.json");
     if (!res.ok) throw new Error("model fetch failed");
     const model = await res.json();
-    const buffer = mods[3].unpack(model);
-    const meta = Object.fromEntries(MUSCLES.map((m) => [m.id, { name: m.name, layer: m.layer, exercises: m.exercises, view: VIEW_HINT[m.id], xray: XRAY.has(m.id) }]));
+    unpack = mods[3].unpack;
+    const buffer = unpack(model);
+    const meta = Object.fromEntries(MUSCLES.map((m) => [m.id, { name: m.name, layer: m.layer, region: m.region, exercises: m.exercises, view: VIEW_HINT[m.id], xray: XRAY.has(m.id) }]));
     anatomy = mods[1].createAnatomy(canvas, model, buffer, meta, $("ruler"));
     figure = mods[2].createFigure(canvas, model, buffer, meta);
+    MOVES = mods[2].MOVE_IDS;
     figure.setTheme(isDark());
-    $("stage-msg").innerHTML = "";
   } catch (e) {
     console.error(e);
     return fail("The 3D model couldn't load. The muscle notes and exercise steps in the panel still work.");
   }
 
-  if (anatomy) anatomy.controls.addEventListener("start", () => setPressed($("tools-anatomy"), "view", ""));
+  anatomy.controls.addEventListener("start", () => setPressed($("tools-anatomy"), "view", ""));
   const ro = new ResizeObserver(() => resize());
   ro.observe(stage);
   resize();
@@ -339,7 +605,7 @@ async function boot() {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (mode === "figure") {
+    if (scene === "figure") {
       updateSteps(figure.update(dt));
       renderer.render(figure.scene, figure.camera);
     } else if (anatomy) {
@@ -349,26 +615,45 @@ async function boot() {
   }
   requestAnimationFrame(frame);
 
+  /** open an exercise page and wait until its muscles are loaded and the figure is posed */
+  async function openExercise(id) {
+    const n = nav();
+    n.length = 1;
+    n.push({ view: "exercise", id, region: n[0].region });
+    render();
+    await idle();
+  }
+  /** resolves once every region the current view needs has loaded and the stage shows it */
+  async function idle() {
+    await ensure(stageSpec(cur()).need);
+    syncStage();
+  }
+
   // hooks for automated checks
   window.__atlas = {
-    go, home, nav, anatomy, figure, render, moves: mods[2].MOVE_IDS,
+    go, home, render, anatomy, figure, moves: MOVES, idle,
+    get nav() { return nav(); },
+    get mode() { return mode; },
+    setMode, setRegion,
     /** draw one exercise at a point in its loop and return the frame as a data URL */
-    snap(id, f, view) {
-      nav.length = 1; nav.push({ view: "exercise", id }); render();
+    async snap(id, f, view) {
+      await openExercise(id);
+      if (!MOVES[id]) { window.__atlas.drawNow(); return canvas.toDataURL("image/jpeg", 0.8); }   // no animation: the atlas shows its muscles
       if (view) { const [fr, an] = view.split("/"); figure.setView(fr || undefined, an || undefined); }
       figure.setPlaying(false); figure.seek(f); updateSteps(figure.update(0));
       renderer.render(figure.scene, figure.camera);
       return canvas.toDataURL("image/jpeg", 0.8);
     },
     /** the same, with the camera on one hand */
-    snapHand(id, f, side, az, el, dist) {
-      nav.length = 1; nav.push({ view: "exercise", id }); render();
+    async snapHand(id, f, side, az, el, dist) {
+      await openExercise(id);
+      if (!MOVES[id]) { window.__atlas.drawNow(); return canvas.toDataURL("image/jpeg", 0.8); }
       figure.setPlaying(false); figure.seek(f); updateSteps(figure.update(0));
       figure.handCam(side, az, el, dist); figure.update(0);
       renderer.render(figure.scene, figure.camera);
       return canvas.toDataURL("image/jpeg", 0.8);
     },
-    drawNow() { if (mode === "anatomy" && anatomy) { anatomy.tick(1); anatomy.invalidate(); anatomy.tick(0); renderer.render(anatomy.scene, anatomy.camera); } },
+    drawNow() { if (scene === "anatomy" && anatomy) { anatomy.tick(1); anatomy.invalidate(); anatomy.tick(0); renderer.render(anatomy.scene, anatomy.camera); } },
   };
 }
 
@@ -376,7 +661,7 @@ function resize() {
   if (!renderer) return;
   const w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
   renderer.setSize(w, h, false);
-  if (anatomy) anatomy.resize(w, h);
+  if (anatomy) { anatomy.resize(w, h); measureInsets(); }
   if (figure) figure.resize(w, h);
 }
 

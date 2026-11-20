@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neck and Upper Back Atlas</title>
+<title>Muscle Atlas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
@@ -53,15 +53,23 @@ h1, h2, h3, p, ul, ol, dl, dd { margin: 0; padding: 0; }
 ul, ol { list-style: none; }
 
 .app { height: 100%; display: flex; flex-direction: column; }
-.bar { display: flex; align-items: baseline; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; padding: 9px 18px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
 .bar h1 { font-family: var(--font-display); font-weight: 600; font-size: 21px; letter-spacing: -0.01em; }
 .bar p { color: var(--muted); font-size: 13.5px; }
 .main { flex: 1; min-height: 0; display: flex; }
+
+/* mode switch: the page's main fork, so it gets the accent when pressed */
+.modes { display: inline-flex; background: var(--chip); border: 1px solid var(--line); border-radius: 99px; padding: 3px; gap: 2px; flex: none; }
+.modes button { padding: 6px 14px; border-radius: 99px; font-size: 14px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.modes button:hover { color: var(--ink); }
+.modes button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 
 /* ---------- stage ---------- */
 .stage { position: relative; flex: 1; min-width: 0; background: radial-gradient(circle at 50% 38%, var(--stage-a), var(--stage-b)); overflow: hidden; touch-action: none; }
 .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
 .stage-head { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; pointer-events: none; }
+.stage-head > div:first-child { text-shadow: 0 0 2px var(--stage-a), 0 0 8px var(--stage-a); }   /* legible over bone */
 .stage-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.2; text-wrap: balance; }
 .stage-sub { color: var(--muted); font-size: 13px; }
 .phase { font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; background: var(--accent); color: var(--on-accent); padding: 3px 10px; border-radius: 99px; white-space: nowrap; }
@@ -90,6 +98,11 @@ ul, ol { list-style: none; }
 .stage-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 .stage-msg:empty { display: none; }
 .stage-msg div { max-width: 36ch; }
+.stage-msg { pointer-events: none; }
+/* loading: a small pill over the last picture rather than a blank stage */
+.stage-msg.loading div { background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: 99px; padding: 7px 16px; color: var(--ink); font-size: 14px; font-weight: 500; backdrop-filter: blur(6px); display: inline-flex; align-items: center; gap: 9px; }
+.stage-msg.loading div::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
 [hidden] { display: none !important; }
 
 /* ---------- panel ---------- */
@@ -109,6 +122,27 @@ button.eyebrow:hover { color: var(--accent); }
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { background: var(--chip); border: 1px solid transparent; border-radius: 99px; padding: 6px 13px; font-size: 14px; font-weight: 500; }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip.minor { background: transparent; border-color: var(--line); color: var(--muted); }
+.chip.minor:hover { border-color: var(--accent); color: var(--accent); }
+
+/* region picker: same pill as the stage controls, wraps on a phone */
+.regions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: -4px; }
+.region { border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; font-size: 13.5px; font-weight: 500; color: var(--muted); }
+.region:hover { color: var(--ink); border-color: var(--muted); }
+.region[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+
+/* strength day cards */
+.day { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; align-items: center; width: 100%; padding: 13px 14px 13px 16px; border: 1px solid var(--line); border-radius: var(--r); }
+.day:hover { border-color: var(--accent); }
+.day .day-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.day .day-n { font-family: var(--font-display); font-size: 22px; font-weight: 600; line-height: 1.15; }
+.day .day-m { font-size: 12.5px; font-weight: 600; color: var(--accent); letter-spacing: 0.02em; }
+.day .d { grid-column: 1; color: var(--muted); font-size: 14px; }
+.day .go { grid-column: 2; grid-row: 1 / span 2; color: var(--muted); display: grid; place-items: center; }
+.day:hover .go { color: var(--accent); }
+.link { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 600; font-size: 14.5px; align-self: flex-start; padding: 2px 0; }
+.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.muted { color: var(--muted); font-size: 14px; }
 
 .group { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 2px; }
 .group-btn { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-weight: 600; font-size: 15px; padding: 3px 0; width: 100%; }
@@ -154,7 +188,10 @@ button.eyebrow:hover { color: var(--accent); }
 .fine a { color: inherit; }
 
 @media (max-width: 860px) {
+  .bar { padding: 8px 12px; }
+  .bar h1 { font-size: 19px; }
   .bar p { display: none; }
+  .modes button { padding: 5px 11px; font-size: 13.5px; }
   .main { flex-direction: column; }
   .stage { flex: none; height: 54%; min-height: 300px; }
   .panel { width: auto; flex: 1; border-left: 0; border-top: 1px solid var(--line); }
@@ -170,12 +207,18 @@ button.eyebrow:hover { color: var(--accent); }
 <body>
 <div class="app">
   <header class="bar">
-    <h1>Neck and Upper Back Atlas</h1>
-    <p>Find the muscle behind the ache, then see what to do about it.</p>
+    <div class="brand">
+      <h1>Muscle Atlas</h1>
+      <p>Find the muscle behind an ache, or plan a strength day.</p>
+    </div>
+    <div class="modes" role="group" aria-label="Mode">
+      <button data-mode="pain" aria-pressed="true">Pain and stretch</button>
+      <button data-mode="strength" aria-pressed="false">Strength</button>
+    </div>
   </header>
   <div class="main">
     <section class="stage" id="stage" aria-label="3D model">
-      <canvas id="gl" tabindex="0" aria-label="3D model of the neck and upper back. Use the muscle list in the panel to select muscles by keyboard."></canvas>
+      <canvas id="gl" tabindex="0" aria-label="3D model of the body. Use the muscle list in the panel to select muscles by keyboard."></canvas>
       <div class="ruler" id="ruler" aria-hidden="true"></div>
       <div class="stage-head">
         <div>
@@ -185,7 +228,7 @@ button.eyebrow:hover { color: var(--accent); }
         <div class="phase" id="phase"></div>
       </div>
       <div class="tip" id="tip"></div>
-      <div class="tools" id="tools-anatomy">
+      <div class="tools" id="tools-anatomy" hidden>
         <div class="seg" role="group" aria-label="View">
           <span class="lab">View</span>
           <button data-view="back" aria-pressed="true">Back</button>

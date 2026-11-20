@@ -12,6 +12,7 @@ const BONE = 0xe7dec9;
 const BONE_NAMES = {
   skull: "Skull", cervical: "Cervical spine (C1 to C7)", thoracic: "Thoracic spine (T1 to T12)", lumbar: "L1 vertebra",
   ribs: "Ribs", sternum: "Breastbone", scapula: "Shoulder blade", clavicle: "Collarbone", humerus: "Upper arm bone",
+  lumbar: "Lumbar spine (L1 to L5)", pelvis: "Pelvis", forearm: "Forearm bones", hand: "Hand", femur: "Thigh bone", shin: "Shin bones", foot: "Foot",
 };
 const VIEW_DIR = {
   back: [0, 0.12, -1], front: [0, 0.1, 1], left: [1, 0.08, -0.18], right: [-1, 0.08, -0.18],
@@ -43,7 +44,7 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.12;
   controls.minDistance = 22;
-  controls.maxDistance = 300;
+  controls.maxDistance = 900;   // far enough to frame the whole body on a narrow phone stage
   controls.rotateSpeed = 0.9;
   controls.zoomToCursor = true;
 
@@ -52,9 +53,8 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
   const bones = [];
   const byId = new Map();   // muscleId -> [meshes]
   let n = 0;
-  for (const part of model.parts) {
-    if (!part.atlas) continue;   // the rest of the skeleton belongs to the exercise view
-    const geo = geometry(part, buffer);
+  function addPart(part, buf, region) {
+    const geo = geometry(part, buf);
     let mesh;
     if (part.kind === "bone") {
       mesh = new THREE.Mesh(geo, boneMat);
@@ -69,6 +69,7 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
       mesh = new THREE.Mesh(geo, mat);
       mesh.userData.base = base;
       mesh.userData.layer = layer;
+      mesh.userData.region = region;
       muscles.push(mesh);
       if (!byId.has(part.id)) byId.set(part.id, []);
       byId.get(part.id).push(mesh);
@@ -77,10 +78,14 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
     mesh.userData.kind = part.kind;
     scene.add(mesh);
   }
+  for (const part of model.parts) addPart(part, buffer, null);   // the skeleton
+  const homeTarget = HOME_TARGET.clone();
+  let homeRadius = HOME_RADIUS, active = null;   // active: Set of region ids on show, null = all
 
   // ---- state ----
   let selected = [];        // muscle ids, in rank order when ranked
   let ranked = false;
+  let wide = false;         // frame the whole shown area rather than zooming to the selection
   let hoverId = null;
   let depth = 1;
   let dirty = true;
@@ -109,7 +114,7 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
       const mat = m.material;
       const isSel = selected.includes(id);
       const peeled = layer < depth && !isSel;
-      m.visible = !peeled;
+      m.visible = !peeled && (!active || active.has(m.userData.region));
       m.userData.ghost = false;
       let opacity = 1;
       if (!any) {
@@ -139,8 +144,17 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
   }
 
   // ---- camera ----
+  // The stage title sits over the top of the canvas and the controls over the bottom. The view window is
+  // shifted so the orbit centre lands in the middle of the clear band between them, and fits are made to that band.
+  const inset = { top: 0, bottom: 0 };
+  function applyInsets() {
+    if (w > 1 && h > 1) camera.setViewOffset(w, h, 0, (inset.bottom - inset.top) / 2, w, h);
+    else camera.updateProjectionMatrix();
+  }
   function fitDistance(radius) {
-    const v = THREE.MathUtils.degToRad(camera.fov) / 2;
+    const band = h - inset.top - inset.bottom;
+    const free = band > h * 0.4 ? band / h : 1;
+    const v = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * free);
     const hHalf = Math.atan(Math.tan(v) * camera.aspect);
     return (radius / Math.sin(Math.min(v, hHalf))) * 1.06;
   }
@@ -163,15 +177,16 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
   }
   function setView(name, ms) {
     const sel = selectionSphere();
-    flyTo(sel ? sel.center : HOME_TARGET.clone(), VIEW_DIR[name] || VIEW_DIR.back, sel ? sel.radius : HOME_RADIUS, ms);
+    flyTo(sel ? sel.center : homeTarget.clone(), VIEW_DIR[name] || VIEW_DIR.back, sel ? sel.radius : homeRadius, ms);
   }
   function selectionSphere() {
     if (!selected.length) return null;
     const box = new THREE.Box3();
     for (const id of selected) for (const m of byId.get(id) || []) box.union(m.geometry.boundingBox);
     const s = box.getBoundingSphere(new THREE.Sphere());
-    s.radius = Math.max(s.radius * 1.5, 17);
-    if (s.radius > HOME_RADIUS) { s.radius = HOME_RADIUS; s.center.copy(HOME_TARGET); }
+    // a wide selection (a strength day) fills the stage with the muscles it lights, not with room around one muscle
+    s.radius = Math.max(s.radius * (wide ? 1.08 : 1.5), 17);
+    if (s.radius > homeRadius) { s.radius = homeRadius; s.center.copy(homeTarget); }
     return s;
   }
 
@@ -203,13 +218,18 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
   function updateRuler() {
     const off = tmp.copy(camera.position).sub(controls.target);
     const upright = Math.abs(off.y) / off.length() < 0.5;
-    for (const t of ticks) {
-      const v = t.p.clone().project(camera);
+    const pts = ticks.map((t) => t.p.clone().project(camera));
+    // only label levels when the spine is on screen and big enough to read: from the legs it is out of
+    // frame, and on the whole body the ticks would sit on top of each other
+    const span = pts.length > 1 ? Math.abs(pts.at(-1).y - pts[0].y) * 0.5 * h : 0;
+    const spine = upright && span > h * 0.3;
+    ticks.forEach((t, i) => {
+      const v = pts[i];
       const y = (1 - v.y) * 0.5 * h;
-      const show = upright && y > 54 && y < h - 64;
+      const show = spine && Math.abs(v.x) < 1 && v.z < 1 && y > Math.max(54, inset.top + 10) && y < h - Math.max(64, inset.bottom + 10);
       t.el.style.opacity = show ? "1" : "0";
       t.el.style.top = y + "px";
-    }
+    });
   }
 
   apply();
@@ -219,7 +239,7 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
       const first = w === 1 && h === 1;
       w = width; h = height;
       camera.aspect = width / height;
-      camera.updateProjectionMatrix();
+      applyInsets();
       if (first) setView("back", 0);
       dirty = true;
     },
@@ -247,10 +267,11 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
     cancelTween() { tween = null; },
     pick,
     hover(id) { if (id !== hoverId) { hoverId = id; apply(); } },
-    /** select muscles; ranked=true colours them by position in the list */
-    select(ids, isRanked = false, view) {
+    /** select muscles; ranked=true colours them by position in the list; isWide keeps the camera on the whole area */
+    select(ids, isRanked = false, view, isWide = false) {
       selected = ids.filter((id) => byId.has(id));
       ranked = isRanked;
+      wide = isWide;
       if (selected.length) {
         let shallow = 4;
         for (const id of selected) shallow = Math.min(shallow, meta[id].layer);
@@ -261,11 +282,37 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
         // keep the viewer's angle, recentre and zoom on the selection (or the whole model)
         const sel = selectionSphere();
         const dir = camera.position.clone().sub(controls.target).normalize().toArray();
-        flyTo(sel ? sel.center : HOME_TARGET.clone(), dir, sel ? sel.radius : HOME_RADIUS);
+        flyTo(sel ? sel.center : homeTarget.clone(), dir, sel ? sel.radius : homeRadius);
       } else if (view !== null) setView(view);
       return depth;
     },
+    /** add one region's muscles (the parts of a muscles-<region>.json file) */
+    addMuscles(parts, buf, region) { for (const part of parts) addPart(part, buf, region); apply(); },
+    /** show only these regions' muscles and frame the camera on them; null = all, framed on the whole body */
+    setRegions(list, ms) {
+      active = list ? new Set(list) : null;
+      const box = new THREE.Box3();
+      for (const m of muscles) if (!active || active.has(m.userData.region)) box.union(m.geometry.boundingBox);
+      if (!active) for (const b of bones) box.union(b.geometry.boundingBox);
+      if (!box.isEmpty()) {
+        // fit the larger of the half height and the half width/depth, not the bounding sphere, which
+        // overshoots on wide boxes and falls short on tall ones such as the legs or the whole body
+        const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+        box.getCenter(homeTarget);
+        homeRadius = Math.max(half.y, half.x, half.z, 20) * 1.02;
+      }
+      depth = 1;
+      apply();
+      if (!selected.length) setView("back", ms);
+    },
     setDepth(d) { depth = d; apply(); },
+    /** pixels covered by overlays at the top and bottom of the canvas; framing keeps clear of them */
+    setInsets(top, bottom) {
+      if (top === inset.top && bottom === inset.bottom) return;
+      inset.top = top; inset.bottom = bottom;
+      applyInsets();
+      dirty = true;
+    },
     getDepth() { return depth; },
     setView,
     colourOf(id) { return "#" + new THREE.Color(colourFor(id)).getHexString(); },

@@ -1,38 +1,109 @@
 // Data check: every id the panel and the scenes rely on resolves. Run: node tools/check_content.mjs
+// Muscle meshes live in one file per region (docs/muscles-<region>.json); the skeleton is in docs/model.json.
 import fs from "node:fs";
-import { GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "../docs/content.js";
+import { REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "../docs/content.js";
 import { MOVES, BASES } from "../docs/moves.js";
 
-const model = JSON.parse(fs.readFileSync(new URL("../docs/model.json", import.meta.url)));
+const read = (f) => JSON.parse(fs.readFileSync(new URL(`../docs/${f}`, import.meta.url)));
 const errs = [];
 const ok = (cond, msg) => { if (!cond) errs.push(msg); };
+const regionIds = new Set(REGIONS.map((r) => r.id));
+const ready = new Set(REGIONS.filter((r) => r.ready).map((r) => r.id));
 const groupIds = new Set(GROUPS.map((g) => g.id));
 const muscleIds = new Set(MUSCLES.map((m) => m.id));
-const sides = (id) => model.parts.filter((p) => p.kind === "muscle" && p.id === id).map((p) => p.side).sort().join("");
+const byMuscle = Object.fromEntries(MUSCLES.map((m) => [m.id, m]));
 
-ok(MUSCLES.length === 17, `expected the 17 muscles in the design table, got ${MUSCLES.length}`);
+// ---- regions and their muscle files ----
+ok(regionIds.size === REGIONS.length, "duplicate region id");
+const parts = [];   // { id, side, region }
+for (const r of REGIONS) {
+  ok(r.name && typeof r.ready === "boolean", `region ${r.id}: needs name and ready`);
+  ok(r.flags === null || (Array.isArray(r.flags) && r.flags.length >= 3), `region ${r.id}: flags must be null or a list of at least 3`);
+  let doc = null;
+  try { doc = read(`muscles-${r.id}.json`); } catch (e) { errs.push(`region ${r.id}: docs/muscles-${r.id}.json missing or unreadable`); continue; }
+  for (const p of doc.parts) {
+    ok(p.kind === "muscle", `muscles-${r.id}.json: part ${p.id || p.name} is not a muscle`);
+    parts.push({ id: p.id, side: p.side, region: r.id });
+  }
+}
+const model = read("model.json");
+ok(!model.parts.some((p) => p.kind === "muscle"), "model.json should hold the skeleton only; muscles go in the region files");
+const sides = (id) => parts.filter((p) => p.id === id).map((p) => p.side).sort().join("");
+for (const p of parts) {
+  ok(muscleIds.has(p.id), `muscles-${p.region}.json: part ${p.id} has no content`);
+  if (byMuscle[p.id]) ok(byMuscle[p.id].region === p.region, `${p.id}: shipped in muscles-${p.region}.json but its group is in region ${byMuscle[p.id].region}`);
+}
+
+// ---- groups and muscles ----
+ok(GROUPS.length === groupIds.size, "duplicate group id");
+for (const g of GROUPS) {
+  ok(regionIds.has(g.region), `group ${g.id}: unknown region ${g.region}`);
+  ok(MUSCLES.some((m) => m.group === g.id), `group ${g.id} has no muscles`);
+}
 ok(muscleIds.size === MUSCLES.length, "duplicate muscle id");
 for (const m of MUSCLES) {
   ok(groupIds.has(m.group), `${m.id}: unknown group ${m.group}`);
   ok(sides(m.id) === "LR", `${m.id}: model parts are "${sides(m.id)}", expected LR`);
   ok(m.layer >= 1 && m.layer <= 4, `${m.id}: layer out of range`);
-  ok(m.exercises.length >= 2, `${m.id}: fewer than 2 exercises`);
+  ok(m.ppl === null || m.ppl === undefined || ["pull", "push", "legs"].includes(m.ppl), `${m.id}: ppl must be pull, push, legs or null`);
+  for (const k of ["name", "latin", "does", "attach", "nerve"]) ok(m[k] && m[k].length > 3, `${m.id}: missing ${k}`);
   for (const e of m.exercises) {
     ok(EXERCISE_INFO[e], `${m.id}: exercise ${e} has no notes`);
-    ok(MOVES[e], `${m.id}: exercise ${e} has no animation`);
+    ok(!EXERCISE_INFO[e] || EXERCISE_INFO[e].mode !== "strength", `${m.id}: ${e} is a strength lift; lifts list their muscles in targets, not the other way round`);
   }
-  for (const k of ["name", "latin", "does", "attach", "nerve", "pain", "triggers", "check"]) ok(m[k] && m[k].length > 3, `${m.id}: missing ${k}`);
+  // regions without pain notes yet may have no exercises; ready ones need the full set
+  if (ready.has(m.region)) {
+    ok(m.exercises.length >= 2, `${m.id}: fewer than 2 exercises`);
+    for (const k of ["pain", "triggers", "check"]) ok(m[k] && m[k].length > 3, `${m.id}: missing ${k}`);
+  }
 }
-for (const g of GROUPS) ok(MUSCLES.some((m) => m.group === g.id), `group ${g.id} has no muscles`);
-for (const p of model.parts) if (p.kind === "muscle") ok(muscleIds.has(p.id), `model part ${p.id} has no content`);
+
+// ---- pain patterns ----
+ok(new Set(PATTERNS.map((p) => p.id)).size === PATTERNS.length, "duplicate pattern id");
 for (const p of PATTERNS) {
+  ok(regionIds.has(p.region), `${p.id}: unknown region ${p.region}`);
   ok(p.kind === "where" || p.kind === "when", `${p.id}: bad kind`);
   ok(p.muscles.length >= 3, `${p.id}: fewer than 3 muscles`);
   for (const x of p.muscles) ok(muscleIds.has(x.id), `${p.id}: unknown muscle ${x.id}`);
 }
-const used = new Set(MUSCLES.flatMap((m) => m.exercises));
+
+// ---- strength days and lifts ----
+const dayIds = STRENGTH.map((d) => d.id);
+ok(["pull", "push", "legs"].every((id) => dayIds.includes(id)) && dayIds.length === 3, `strength days must be pull, push and legs, got ${dayIds.join(", ")}`);
+// the day each lift belongs to, from the table in docs/contract.md
+const LIFT_DAY = {
+  "pull-up": "pull", "bent-over-row": "pull", "biceps-curl": "pull",
+  "push-up": "push", "floor-press": "push", "overhead-press": "push", "lateral-raise": "push", "triceps-extension": "push",
+  "squat": "legs", "romanian-deadlift": "legs", "split-squat": "legs", "glute-bridge": "legs", "calf-raise": "legs",
+};
+const daysOf = (id) => STRENGTH.filter((d) => d.exercises.includes(id)).map((d) => d.id);
+for (const d of STRENGTH) {
+  ok(d.name && d.exercises.length > 0, `day ${d.id}: needs a name and exercises`);
+  ok(new Set(d.exercises).size === d.exercises.length, `day ${d.id}: lists an exercise twice`);
+  for (const e of d.exercises) ok(EXERCISE_INFO[e], `day ${d.id}: exercise ${e} has no notes`);
+}
 for (const [id, e] of Object.entries(EXERCISE_INFO)) {
-  ok(used.has(id), `exercise ${id} is not used by any muscle`);
+  if (e.mode !== "strength") {
+    const onDay = STRENGTH.some((d) => d.exercises.includes(id));
+    ok(onDay || (!e.targets && !e.also), `${id}: targets/also only belong on strength lifts or exercises a day reuses`);
+    for (const t of [...(e.targets || []), ...(e.also || [])]) ok(MUSCLES.some((m) => m.id === t), `${id}: target ${t} is not a muscle`);
+    continue;
+  }
+  ok(Array.isArray(e.targets) && e.targets.length > 0, `${id}: strength lift with no targets`);
+  for (const t of [...(e.targets || []), ...(e.also || [])]) ok(muscleIds.has(t), `${id}: unknown muscle ${t}`);
+  for (const t of e.also || []) ok(!(e.targets || []).includes(t), `${id}: ${t} is in both targets and also`);
+  const want = LIFT_DAY[id], got = daysOf(id).join(",");
+  if (want) ok(got === want, `${id}: should be in the ${want} day (docs/contract.md), found in ${got || "none"}`);
+  else ok(got, `${id}: strength lift is not in any day`);
+}
+
+// ---- exercises and their animations ----
+const used = new Set([...MUSCLES.flatMap((m) => m.exercises), ...STRENGTH.flatMap((d) => d.exercises)]);
+for (const [id, e] of Object.entries(EXERCISE_INFO)) {
+  ok(used.has(id), `exercise ${id} is not used by any muscle or strength day`);
+  ok(Array.isArray(e.steps) && e.steps.length === 4, `${id}: needs exactly 4 steps`);
+  for (const k of ["name", "type", "kit", "dose", "feel", "ease"]) ok(e[k], `${id}: missing ${k}`);
+  ok(["Stretch", "Strength", "Control", "Mobility"].includes(e.type), `${id}: bad type ${e.type}`);
   const mv = MOVES[id];
   if (!mv) { errs.push(`exercise ${id} has no animation`); continue; }
   ok(BASES[mv.base], `${id}: unknown base ${mv.base}`);
@@ -43,10 +114,12 @@ for (const [id, e] of Object.entries(EXERCISE_INFO)) {
   ok(mv.phases.some((p) => p.w), `${id}: no working phase`);
 }
 for (const id of Object.keys(MOVES)) ok(EXERCISE_INFO[id], `animation ${id} has no notes`);
+
+// ---- copy ----
 ok(RED_FLAGS.length >= 5, "red flags list too short");
 const banned = /\b(diagnos(e|is|es|tic))\b/i;
-const text = JSON.stringify({ GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO });
+const text = JSON.stringify({ REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO });
 ok(!banned.test(text), "content claims diagnosis");
 
-if (errs.length) { console.log(errs.join("\n")); process.exit(1); }
-console.log(`ok: ${MUSCLES.length} muscles, ${PATTERNS.length} patterns, ${Object.keys(EXERCISE_INFO).length} exercises`);
+if (errs.length) { console.log(errs.join("\n")); console.log(`${errs.length} problems`); process.exit(1); }
+console.log(`ok: ${REGIONS.length} regions, ${MUSCLES.length} muscles, ${PATTERNS.length} patterns, ${Object.keys(EXERCISE_INFO).length} exercises, ${STRENGTH.length} strength days`);

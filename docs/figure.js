@@ -55,6 +55,7 @@ function expand(layer) {
   if (o.hipB) { o.hipL = o.hipL || o.hipB; o.hipR = o.hipR || o.hipB; delete o.hipB; }
   if (o.kneeB !== undefined) { o.kneeL = o.kneeL ?? o.kneeB; o.kneeR = o.kneeR ?? o.kneeB; delete o.kneeB; }
   if (o.ankB !== undefined) { o.ankL = o.ankL ?? o.ankB; o.ankR = o.ankR ?? o.ankB; delete o.ankB; }
+  if (o.legB) { o.legL = o.legL || o.legB; o.legR = o.legR || { ...o.legB, p: flipX(o.legB.p), pole: flipX(o.legB.pole) }; delete o.legB; }
   return o;
 }
 const ease = (u, kind) => kind === "i" ? u * u : kind === "o" ? 1 - (1 - u) * (1 - u) : kind === "l" ? u : u * u * (3 - 2 * u);
@@ -129,7 +130,7 @@ export function createFigure(canvas, model, buffer, meta) {
 
   const muscles = [], rigid = {};
   for (const part of model.parts) {
-    if (!part.ex || part.kind !== "bone") continue;
+    if (part.kind !== "bone") continue;
     const m = new THREE.Mesh(geometry(part, buffer, CM), mats.bone);
     m.castShadow = true;
     holder[part.joint].add(m);
@@ -137,17 +138,19 @@ export function createFigure(canvas, model, buffer, meta) {
   }
   scene.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton(R.skin.map((n) => bone[n]));   // bind pose = rest pose
-  for (const part of model.parts) {
-    if (!part.ex || part.kind !== "muscle") continue;
-    const layer = meta[part.id] ? meta[part.id].layer : 2;
-    const mat = new THREE.MeshStandardMaterial({ color: LAYER_COLOUR[layer], roughness: 0.56, side: THREE.DoubleSide });
-    const m = new THREE.SkinnedMesh(geometry(part, buffer, CM, true), mat);
-    m.frustumCulled = false;
-    m.castShadow = true;
-    m.userData = { id: part.id, side: part.side, layer, base: new THREE.Color(LAYER_COLOUR[layer]) };
-    scene.add(m);
-    m.bind(skeleton);
-    muscles.push(m);
+  /** add one region's muscles (parts of a muscles-<region>.json file), skinned to the skeleton */
+  function addMuscles(parts, buf, region) {
+    for (const part of parts) {
+      const layer = meta[part.id] ? meta[part.id].layer : 2;
+      const mat = new THREE.MeshStandardMaterial({ color: LAYER_COLOUR[layer], roughness: 0.56, side: THREE.DoubleSide });
+      const m = new THREE.SkinnedMesh(geometry(part, buf, CM, true), mat);
+      m.frustumCulled = false;
+      m.visible = false;
+      m.userData = { id: part.id, side: part.side, layer, region, base: new THREE.Color(LAYER_COLOUR[layer]) };
+      scene.add(m);
+      m.bind(skeleton, new THREE.Matrix4());   // geometry is in rest coordinates whatever pose the skeleton is in now
+      muscles.push(m);
+    }
   }
 
   // ---------- arm geometry ----------
@@ -179,9 +182,14 @@ export function createFigure(canvas, model, buffer, meta) {
     const gg = g.clone().addScaledVector(n, -g.dot(n)).normalize();
     return m.makeBasis(n, gg, new V3().crossVectors(n, gg));
   }
-  const frames = { chest: bone.thorax, head: bone.head, neck: bone.c7, pelvis: bone.pelvis, world: scene };
+  const frames = { chest: bone.thorax, head: bone.head, neck: bone.c7, pelvis: bone.pelvis, world: scene, thighL: bone.femL, thighR: bone.femR };
+  const legs = {};
+  for (const S of "LR") {
+    const th = rest["tib" + S].clone().sub(rest["fem" + S]), sh = rest["foot" + S].clone().sub(rest["tib" + S]);
+    legs[S] = { thigh: th.length(), shin: sh.length(), thR: th.normalize(), shR: sh.normalize(), hinge: new V3(1, 0, 0) };
+  }
   const frameOf = (spec, side) => (spec.f === "thigh" ? bone["fem" + side] : frames[spec.f]);
-  const frameJoint = (spec, side) => (spec.f === "thigh" ? "fem" + side : { chest: "thorax", head: "head", neck: "c7", pelvis: "pelvis" }[spec.f]);
+  const frameJoint = (spec, side) => (spec.f === "thigh" ? "fem" + side : { chest: "thorax", head: "head", neck: "c7", pelvis: "pelvis", thighL: "femL", thighR: "femR" }[spec.f]);
 
   // A hand that rests on a bone is placed by casting a ray at the bone in the rest pose, so the
   // palm sits just clear of the surface instead of hovering above it or sinking into it.
@@ -258,6 +266,11 @@ export function createFigure(canvas, model, buffer, meta) {
         });
       }
     },
+    bar: () => {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1.2, 16), mats.weight);
+      b.rotation.z = Math.PI / 2; b.position.set(0, 2.1, 0.02); b.castShadow = true; props.add(b);
+      box(0.04, 2.1, 0.04, [0.6, 1.05, 0.02]); box(0.04, 2.1, 0.04, [-0.6, 1.05, 0.02]);
+    },
     bandFront: () => {
       box(0.04, 1.4, 0.04, [0, 0.7, 1.3]);
       const anchor = new V3(0, 1.22, 1.28);
@@ -279,17 +292,18 @@ export function createFigure(canvas, model, buffer, meta) {
   const view = { frame: "whole", angle: "best" };
   const targetMats = [];
 
-  function paint(id, focus) {
+  function paint(ids) {
     // light up the muscles this exercise works; ghost anything lying over the deepest of them
-    // opened from one muscle's page, only that muscle lights up; otherwise everything the move works
-    const ids = focus ? [focus] : Object.keys(meta).filter((m) => meta[m].exercises.includes(id));
     const onSide = (m) => !move.side || move.side === m.userData.side;
+    const regions = new Set(ids.map((m) => meta[m].region));
     let deepest = 0;
     for (const m of ids) deepest = Math.max(deepest, meta[m].layer);
     targetMats.length = 0;
     for (const m of muscles) {
-      const { id: mid, layer, base } = m.userData;
+      const { id: mid, layer, base, region } = m.userData;
       const mat = m.material;
+      m.visible = regions.has(region);
+      if (!m.visible) continue;
       const isT = ids.includes(mid) && onSide(m);
       let opacity = 1;
       mat.emissive.setHex(0);
@@ -312,7 +326,8 @@ export function createFigure(canvas, model, buffer, meta) {
     }
   }
 
-  function load(id, focus) {
+  /** @param targets muscle ids to light up */
+  function load(id, targets) {
     move = MOVES[id];
     if (!move) return false;
     const base = { ...ZERO, ...expand(BASES[move.base]), ...expand(move.rest || {}) };
@@ -321,7 +336,7 @@ export function createFigure(canvas, model, buffer, meta) {
     dyn.length = 0;
     for (const c of [...props.children]) props.remove(c);
     for (const p of move.props) BUILD[p]();
-    paint(id, focus);
+    paint(targets);
     const lying = move.base === "prone" || move.base === "supine";
     // targets sit below the figure's middle so the controls along the bottom of the stage don't cover the feet
     autoView = { yaw: 30, pitch: 8, dist: lying ? 4.4 : move.base === "sit" ? 4.4 : 5.2, target: lying ? [0, -0.05, 0.05] : [0, move.base === "sit" ? 0.56 : 0.74, 0], ...move.view };
@@ -533,8 +548,28 @@ export function createFigure(canvas, model, buffer, meta) {
     for (const [side, sx] of [["L", 1], ["R", -1]]) {
       const hip = P["hip" + side];
       bone["fem" + side].rotation.set(-hip[0] * D2R, 0, hip[1] * D2R * sx);
-      bone["tib" + side].rotation.x = (A["knee" + side] + (B["knee" + side] - A["knee" + side]) * u) * D2R;
-      bone["foot" + side].rotation.x = (A["ank" + side] + (B["ank" + side] - A["ank" + side]) * u) * D2R;
+      bone["tib" + side].rotation.set((A["knee" + side] + (B["knee" + side] - A["knee" + side]) * u) * D2R, 0, 0);
+      bone["foot" + side].rotation.set((A["ank" + side] + (B["ank" + side] - A["ank" + side]) * u) * D2R, 0, 0);
+    }
+    scene.updateMatrixWorld(true);
+    for (const side of "LR") {
+      const LA = A["leg" + side], LB = B["leg" + side];
+      if (!LA || !LB) continue;
+      // feet planted: ankle target in the room, knee pointing along `pole`, foot pitched by `foot` degrees
+      const g = legs[side], fem = bone["fem" + side], tib = bone["tib" + side];
+      const hipW = fem.getWorldPosition(new V3());
+      const ankle = new V3().fromArray(lerpArr(LA.p, LB.p, u)), pole = new V3().fromArray(lerpArr(LA.pole, LB.pole, u)).normalize();
+      const sol = ik(hipW, ankle, g.thigh, g.shin, pole);
+      const pelQ = bone.pelvis.getWorldQuaternion(new THREE.Quaternion());
+      const femQ = frameQuat(g.thR, g.hinge, sol.E.clone().sub(hipW).normalize(), sol.hinge, new THREE.Quaternion());
+      const tibQ = frameQuat(g.shR, g.hinge, sol.end.clone().sub(sol.E).normalize(), sol.hinge, new THREE.Quaternion());
+      fem.quaternion.copy(pelQ).invert().multiply(femQ);
+      tib.quaternion.copy(femQ).invert().multiply(tibQ);
+      // foot: degrees of pitch, or [x, y, z] Euler degrees (XYZ) for a foot turned out of the sagittal plane
+      const fA = LA.foot || 0, fB = LB.foot || 0;
+      const footQ = Array.isArray(fA) ? new THREE.Quaternion().setFromEuler(new THREE.Euler(...lerpArr(fA, fB, u).map((v) => v * D2R)))
+        : new THREE.Quaternion().setFromAxisAngle(new V3(1, 0, 0), (fA + (fB - fA) * u) * D2R);
+      bone["foot" + side].quaternion.copy(tibQ).invert().multiply(footQ);
     }
     scene.updateMatrixWorld(true);
     solveArm("L", A.aL, B.aL, u, P.shL);
@@ -549,7 +584,7 @@ export function createFigure(canvas, model, buffer, meta) {
   }
 
   return {
-    scene, camera, controls, load,
+    scene, camera, controls, load, addMuscles,
     resize(width, height) { camera.aspect = width / height; camera.updateProjectionMatrix(); },
     /** advance the animation; returns { step, label, working } for the instructions */
     update(dt) {

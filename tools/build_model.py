@@ -1,4 +1,4 @@
-"""Build site/model.json from the BodyExplorer GLB files (BodyParts3D and Z-Anatomy data).
+"""Build site/model.json and site/muscles-<region>.json from the BodyExplorer GLB files (BodyParts3D data).
 
 Usage: python3 build_model.py <anatomy.glb> <skeleton.glb> <sacrum.stl> <out_dir>
 
@@ -20,12 +20,12 @@ import fast_simplification
 from scipy.spatial import cKDTree
 
 from parts import (MUSCLES, SKULL, CERV, THOR, LUMB, RIBS, STERNUM, CARPUS, METACARPALS, DIGITS, FOOT_RE, LEVELS,
-                   MUSCLE_KEEP, CUT_Z, HUMERUS_CUT_Z, ORIGIN)
+                   MUSCLE_KEEP, CUT_Z, HUMERUS_CUT_Z, ORIGIN, REGION_UNITS, BELOW_CUT, REGION_KEEP)
 
 CT = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
 NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
-SKIN_JOINTS = ["head", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "thorax", "l1",
-               "clavL", "clavR", "scapL", "scapR", "humL", "humR"]
+SKIN_JOINTS = (["head", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "thorax", "l1", "l2", "l3", "l4", "l5", "pelvis"]
+               + [j + S for S in "LR" for j in ("clav", "scap", "hum", "ulna", "rad", "hand", "fem", "tib", "foot")])
 
 
 def read_glb(path):
@@ -73,6 +73,14 @@ def clip_above(p, f, z):
         m = trimesh.intersections.slice_mesh_plane(m, [0, 0, 1], [0, 0, z], cap=True)
     except Exception:
         m = trimesh.intersections.slice_mesh_plane(m, [0, 0, 1], [0, 0, z], cap=False)
+    return np.asarray(m.vertices), np.asarray(m.faces)
+
+
+def clip_below(p, f, z):
+    """keep the part of a mesh under height z"""
+    if p[:, 2].max() <= z:
+        return p, f
+    m = trimesh.intersections.slice_mesh_plane(trimesh.Trimesh(p, f, process=False), [0, 0, -1], [0, 0, z], cap=False)
     return np.asarray(m.vertices), np.asarray(m.faces)
 
 
@@ -218,7 +226,7 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
             p, f = simplify(p, f, keep, force=True)
         else:
             p, f = merge([prep(bones, n, keep, cut) for n in names])
-        parts.append(dict(id=pid, kind="bone", side=side, name=name, joint=joint, atlas=atlas, ex=ex, p=p, f=f))
+        parts.append(dict(id=pid, kind="bone", side=side, name=name, joint=joint, p=p, f=f))
 
     # ---------- bones ----------
     bone("skull", SKULL, "head", "skull", 0.28, True, True)
@@ -235,8 +243,7 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
     for s, S in (("left", "L"), ("right", "R")):
         bone("scapula", [f"{s} scapula"], "scap" + S, "scapula", 0.24, True, True, S)
         bone("clavicle", [f"{s} clavicle"], "clav" + S, "clavicle", 1.0, True, True, S)
-        bone("humerus", [f"{s} humerus"], "hum" + S, "humerus", 0.9, True, False, S, cut=HUMERUS_CUT_Z)
-        bone("humerus-full", [f"{s} humerus"], "hum" + S, "humerus", 0.7, False, True, S)
+        bone("humerus", [f"{s} humerus"], "hum" + S, "humerus", 0.7, True, True, S)
         bone("ulna", [f"{s} ulna"], "ulna" + S, "forearm", 1.0, False, True, S)
         bone("radius", [f"{s} radius"], "rad" + S, "forearm", 1.0, False, True, S)
         palm = [f"{s} {c}" for c in CARPUS if f"{s} {c}" in bones] + [f"{s} {o} metacarpal bone" for o in METACARPALS]
@@ -294,13 +301,21 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
     floor = min(bones[n][0][:, 2].min() for n in matching(FOOT_RE, "left"))
 
     # ---------- muscles ----------
-    cloud = {"head": pts(*SKULL), "thorax": pts(*THOR, *RIBS, *STERNUM), "l1": pts(LUMB[0])}
+    cloud = {"head": pts(*SKULL), "thorax": pts(*THOR, *RIBS, *STERNUM), "pelvis": pts("left hip bone", "right hip bone", "sacrum")}
     for i, n in enumerate(CERV):
         cloud[f"c{i + 1}"] = pts(n)
+    for i, n in enumerate(LUMB):
+        cloud[f"l{i + 1}"] = pts(n)
     for s, S in (("left", "L"), ("right", "R")):
         cloud["clav" + S] = pts(f"{s} clavicle")
         cloud["scap" + S] = pts(f"{s} scapula")
         cloud["hum" + S] = pts(f"{s} humerus")
+        cloud["ulna" + S] = pts(f"{s} ulna")
+        cloud["rad" + S] = pts(f"{s} radius")
+        cloud["hand" + S] = pts(*[f"{s} {o} metacarpal bone" for o in METACARPALS], *[f"{s} {c}" for c in CARPUS if f"{s} {c}" in bones])
+        cloud["fem" + S] = pts(f"{s} femur")
+        cloud["tib" + S] = pts(f"{s} tibia", f"{s} fibula")
+        cloud["foot" + S] = pts(*matching(FOOT_RE, s))
     trees = {k: cKDTree(v) for k, v in cloud.items()}
 
     for mid, (names, mirrored, joints) in MUSCLES.items():
@@ -308,7 +323,24 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         right = mirror(*left) if mirrored else merge([prep(muscles, n.format(s="right"), MUSCLE_KEEP, CUT_Z) for n in names])
         for S, (p, f) in (("L", left), ("R", right)):
             idx, w = skin_weights(p, f, [j.format(S=S) for j in joints], trees)
-            parts.append(dict(id=mid, kind="muscle", side=S, name=mid, joint="", atlas=True, ex=True, p=p, f=f, skin=(idx, w)))
+            parts.append(dict(id=mid, kind="muscle", side=S, name=mid, joint="", region="neck", p=p, f=f, skin=(idx, w)))
+
+    # the rest of the body, region by region
+    left_names = [n for n in muscles if re.search(r"\bleft\b", n)]
+    for region, units in REGION_UNITS.items():
+        for uid, (rx, joints, _layer) in units.items():
+            names = sorted(n for n in left_names if re.search(rx, n))
+            if not names:
+                raise KeyError(f"{uid}: no source mesh matches {rx}")
+            for s_, S in (("left", "L"), ("right", "R")):
+                side = lambda n: re.sub(r"\bleft\b", s_, n)
+                meshes = [prep(muscles, side(n), REGION_KEEP) for n in names]
+                for extra in BELOW_CUT.get(uid, []):
+                    pe, fe = clip_below(*weld(*muscles[extra.format(s=s_)]), CUT_Z)
+                    meshes.append(simplify(pe, fe, REGION_KEEP))
+                p, f = merge(meshes)
+                idx, w = skin_weights(p, f, [j.format(S=S) for j in joints], trees)
+                parts.append(dict(id=uid, kind="muscle", side=S, name=uid, joint="", region=region, p=p, f=f, skin=(idx, w)))
 
     # ---------- pack ----------
     levels = []
@@ -316,34 +348,40 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         v = bones[name][0]
         levels.append({"label": label, "p": [round(float(x), 3) for x in to_model(v[np.argmax(v[:, 1])])[0]]})
 
-    blob = bytearray()
+    files = {}   # file name -> {"parts": [...], "blob": bytearray}
 
-    def put(arr):
-        while len(blob) % 4:
-            blob.append(0)
-        off = len(blob)
-        blob.extend(arr.tobytes())
-        return off
+    def pack(part):
+        out = files.setdefault("muscles-" + part["region"] if part["kind"] == "muscle" else "model", {"parts": [], "blob": bytearray()})
+        blob = out["blob"]
 
-    manifest, n_atlas, n_ex = [], 0, 0
-    for part in parts:
+        def put(arr):
+            while len(blob) % 4:
+                blob.append(0)
+            off = len(blob)
+            blob.extend(arr.tobytes())
+            return off
+
         p = to_model(part["p"])
         lo, hi = p.min(axis=0), p.max(axis=0)
         span = np.where(hi - lo > 1e-9, hi - lo, 1.0)
         big = len(p) > 65535
         entry = {
             "id": part["id"], "kind": part["kind"], "side": part["side"], "name": part["name"], "joint": part["joint"],
-            "atlas": part["atlas"], "ex": part["ex"], "v": int(len(p)), "i": int(part["f"].size),
+            "v": int(len(p)), "i": int(part["f"].size),
             "vo": put(np.round((p - lo) / span * 65535.0).astype("<u2")),
             "io": put(part["f"].astype("<u4" if big else "<u2")), "u32": bool(big),
             "min": [round(float(x), 4) for x in lo], "max": [round(float(x), 4) for x in hi],
         }
         if "skin" in part:
             entry["so"] = put(np.hstack(part["skin"]).astype(np.uint8))   # N x 8: four joint indices, four weights
-        manifest.append(entry)
-        n_atlas += len(p) if part["atlas"] else 0
-        n_ex += len(p) if part["ex"] else 0
-        print(f"{part['kind']:6} {part['id']:22} {part['side']:1} verts {len(p):6} {'A' if part['atlas'] else ' '}{'E' if part['ex'] else ' '}")
+        out["parts"].append(entry)
+        return len(p)
+
+    counts = {}
+    for part in parts:
+        key = part.get("region", "bones")
+        counts[key] = counts.get(key, 0) + pack(part)
+    print("verts:", counts, "total", sum(counts.values()))
 
     r3 = lambda v: [round(float(x), 3) for x in np.ravel(v)]
     rig = {"floor": round((floor - ORIGIN[2]) / 10.0, 3), "skin": SKIN_JOINTS,
@@ -361,13 +399,15 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         rig.update(hand_rig(bones, "left" if S == "L" else "right", S))
     rig["joints"].update(FINGER_JOINTS)
 
-    with open(out_dir + "/model.json", "w") as fh:
-        json.dump({"parts": manifest, "levels": levels, "rig": rig,
-                   "data": base64.b64encode(bytes(blob)).decode("ascii")}, fh, separators=(",", ":"))
-    print(f"atlas verts {n_atlas}  exercise verts {n_ex}  bytes {len(blob)}")
-    print(json.dumps(rig["joints"]))
-    if max(n_atlas, n_ex) > 180000:
-        sys.exit("a scene is over the 180,000 vertex budget")
+    for name, out in files.items():
+        doc = {"parts": out["parts"], "data": base64.b64encode(bytes(out["blob"])).decode("ascii")}
+        if name == "model":
+            doc.update(levels=levels, rig=rig)
+        with open(f"{out_dir}/{name}.json", "w") as fh:
+            json.dump(doc, fh, separators=(",", ":"))
+        print(name, len(out["parts"]), "parts", len(out["blob"]), "bytes")
+    if sum(counts.values()) > 400000:
+        sys.exit("over the 400,000 vertex budget")
 
 
 if __name__ == "__main__":
