@@ -1,4 +1,5 @@
-// Unpacks model.json: base64 -> ArrayBuffer, and one part -> BufferGeometry.
+// Unpacks model.json: base64 -> ArrayBuffer, and one part -> BufferGeometry (split into muscle and tendon sheet
+// when the part has `tendon`, see docs/contract.md addendum 4).
 import * as THREE from "three";
 
 /** decode the base64 payload of a parsed model.json and release the string */
@@ -39,4 +40,22 @@ export function geometry(part, buffer, scale = 1, skin = false) {
   g.computeBoundingBox();
   g.computeBoundingSphere();
   return g;
+}
+
+/**
+ * A part with `tendon` (an index offset) draws its aponeurosis from that index on. Returns the fleshy and the
+ * tendon geometry; they share the vertex attributes, so the edge between them has no seam. No `tendon`: [geo, null].
+ */
+export function splitTendon(geo, part) {
+  if (part.tendon === undefined) return [geo, null];
+  const idx = geo.index.array;
+  const sub = (a, b) => {
+    const g = new THREE.BufferGeometry();
+    for (const [k, attr] of Object.entries(geo.attributes)) g.setAttribute(k, attr);
+    g.setIndex(new THREE.BufferAttribute(idx.slice(a, b), 1));
+    g.boundingBox = geo.boundingBox;
+    g.boundingSphere = geo.boundingSphere;
+    return g;
+  };
+  return [sub(0, part.tendon), sub(part.tendon, idx.length)];
 }

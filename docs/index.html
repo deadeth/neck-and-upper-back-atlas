@@ -124,6 +124,26 @@ ul, ol { list-style: none; }
 .head-r .tally-s { flex-basis: 100%; text-align: right; white-space: normal; }
 .head-r .tally-n { font-size: 21px; }
 .head-r .skip { display: none; margin-left: 0; pointer-events: auto; }
+/* the big Start over the model while a real-time session waits: a slow ring pulse (about every 1.4 s), never a blink */
+.go { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 168px; padding: 15px 30px 13px; border-radius: 999px; background: var(--accent); color: var(--on-accent); text-align: center; box-shadow: 0 6px 22px color-mix(in srgb, var(--ink) 22%, transparent); opacity: 0; visibility: hidden; transition: opacity 0.18s, visibility 0s 0.18s; }
+.go.on { opacity: 1; visibility: visible; transition: opacity 0.18s; }
+.go:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); }
+.go:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; border-radius: 999px; }
+.go-in { display: inline-flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
+.go-plan { font-size: 13.5px; font-weight: 500; opacity: 0.9; white-space: nowrap; }
+.go-ring { position: absolute; inset: -3px; border-radius: inherit; border: 3px solid var(--accent); pointer-events: none; animation: go-pulse 1.4s ease-out infinite; }
+/* rest between sets: a small picker under the big Start and beside a running rest between sets */
+.rest-pick { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); white-space: nowrap; }
+.rest-pick-k { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+.rest-pick select { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 4px 8px; cursor: pointer; }
+.rest-pick select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.go-rest { position: absolute; left: 50%; top: calc(50% + 60px); transform: translateX(-50%); z-index: 2; padding: 4px 5px 4px 13px; border-radius: 99px; border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(6px); opacity: 0; visibility: hidden; transition: opacity 0.18s, visibility 0s 0.18s; }
+.go-rest.on { opacity: 1; visibility: visible; transition: opacity 0.18s; }
+.caption .rest-pick { flex: none; align-self: center; margin-left: 10px; }
+.head-rest { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
+.head-r .rest-pick { display: none; }
+.head-r .rest-pick-k { display: none; }
+@keyframes go-pulse { from { transform: scale(1); opacity: 0.6; } to { transform: scale(1.28, 1.5); opacity: 0; } }
 .rt-head { display: none; pointer-events: auto; }
 .stage-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 .stage-msg:empty { display: none; }
@@ -262,12 +282,16 @@ button.eyebrow:hover { color: var(--accent); }
   .head-count { display: inline-flex; }
   .head-r .tally { display: flex; }
   .head-r .skip { display: inline-block; }
+  .head-r .rest-pick { display: inline-flex; }
+  .head-r { gap: 4px; }
+  .stage.rt-count .phase { display: none; }   /* the countdown already says Hold or Rest and the time */
+  .go { min-width: 156px; padding: 14px 26px 12px; }
   .rt-tools { display: none; }   /* a third row of tools would cover the feet: on a phone the toggle sits top right */
   .rt-head { display: inline-flex; }
 }
 @media (hover: none) { .search-key { display: none; } }
 @media (max-width: 1100px) { .bar p:not(.search-none) { display: none; } }   /* room for the search on one row */
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .count-bar { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .count-bar { display: none; } .go-ring { animation: none; transform: scale(1.12); opacity: 0.45; } }
 </style>
 </head>
 <body>
@@ -306,7 +330,7 @@ button.eyebrow:hover { color: var(--accent); }
           <div class="phase" id="phase"></div>
           <div class="tally" id="head-tally" aria-live="polite" hidden><span class="tally-k"></span><span class="tally-n"></span><span class="tally-s"></span></div>
           <div class="head-count" id="head-count" role="timer" aria-label="Time left" hidden><span class="count-k"></span><span class="count-n"></span><span class="count-u">s</span><span class="count-bar"><i></i></span></div>
-          <button class="skip" data-act="skip-rest" hidden>Skip rest</button>
+          <div class="head-rest"><label class="rest-pick in-rest" hidden><span class="rest-pick-k">Set rest</span><select data-rest-pick aria-label="Rest between sets"><option value="">Default</option><option value="60">60 s</option><option value="90">90 s</option><option value="120">120 s</option><option value="180">180 s</option></select></label><button class="skip" data-act="skip-rest" hidden>Skip rest</button></div>
         </div>
       </div>
       <div class="tip" id="tip"></div>
@@ -327,7 +351,7 @@ button.eyebrow:hover { color: var(--accent); }
         <div class="seg" id="clear-wrap" hidden><button data-act="clear">Show all muscles</button></div>
       </div>
       <div class="tools" id="tools-figure" hidden>
-        <div class="caption-row"><div class="tally" id="tally" aria-live="polite" hidden><span class="tally-k"></span><span class="tally-n"></span><span class="tally-s"></span></div><div class="caption" id="caption"><b id="cap-n"></b><span id="cap-t"></span><span class="count" id="cap-count" role="timer" aria-label="Time left" hidden><span class="count-k"></span><span class="count-n"></span><span class="count-u">s</span></span><button class="skip" data-act="skip-rest" hidden>Skip rest</button><span class="count-bar" hidden><i></i></span></div></div>
+        <div class="caption-row"><div class="tally" id="tally" aria-live="polite" hidden><span class="tally-k"></span><span class="tally-n"></span><span class="tally-s"></span></div><div class="caption" id="caption"><b id="cap-n"></b><span id="cap-t"></span><span class="count" id="cap-count" role="timer" aria-label="Time left" hidden><span class="count-k"></span><span class="count-n"></span><span class="count-u">s</span></span><button class="skip" data-act="skip-rest" hidden>Skip rest</button><label class="rest-pick in-rest" hidden><span class="rest-pick-k">Set rest</span><select data-rest-pick aria-label="Rest between sets"><option value="">Default</option><option value="60">60 s</option><option value="90">90 s</option><option value="120">120 s</option><option value="180">180 s</option></select></label><span class="count-bar" hidden><i></i></span></div></div>
         <div class="seg">
           <button class="icon" data-act="play" id="btn-play" aria-label="Pause"></button>
         </div>
@@ -354,6 +378,8 @@ button.eyebrow:hover { color: var(--accent); }
         <span class="spacer"></span>
         <div class="seg"><button class="solid" data-act="to-model">Back to the model</button></div>
       </div>
+      <button class="go" id="btn-go" data-act="play" aria-label="Start"><span class="go-ring" aria-hidden="true"></span><span class="go-in"><svg width="20" height="20" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.2v9.6L10.6 6z" fill="currentColor"/></svg><span class="go-t">Start</span></span><span class="go-plan"></span></button>
+      <label class="rest-pick go-rest" id="go-rest"><span class="rest-pick-k">Rest between sets</span><select data-rest-pick aria-label="Rest between sets"><option value="">Default</option><option value="60">60 s</option><option value="90">90 s</option><option value="120">120 s</option><option value="180">180 s</option></select></label>
       <div class="stage-msg" id="stage-msg"></div>
     </section>
     <aside class="panel" id="panel" aria-live="polite"></aside>

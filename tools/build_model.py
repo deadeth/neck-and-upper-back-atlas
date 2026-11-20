@@ -6,6 +6,9 @@ The file holds three things:
   parts  - bones and muscles, each flagged for the atlas view, the exercise view, or both
   rig    - joint centres and arm geometry for the exercise skeleton, plus skin weights per muscle
   data   - all geometry packed as base64 (the artifact host serves .json but not .bin)
+
+A muscle part may carry `tendon`: the index (into its triangle index list) where its aponeurosis starts.
+Triangles before it are fleshy muscle, from it on are tendon sheet; both share one vertex list and skin.
 """
 import base64
 import json
@@ -101,14 +104,32 @@ def rectus_border(p, f, sg, step=2.0, sigma=1.5):
     return lambda z: np.interp(z, zs, xl)   # held at its end values above and below the rectus
 
 
-def cut_sheath(p, f, border, sg, front_y):
-    """drop the part of a mesh in front of front_y and medial to border(z); split the triangles on the
-    cut line so the kept part ends in a clean edge, then drop the scraps left floating"""
+def drop_debris(p, f):
+    """drop loose scan scraps: pieces joined to the rest only through edges shared by exactly two faces and
+    under a tenth the size of the largest piece (the external oblique scan carries ~240 sliver patches lying
+    on its surface; the other sheets come through whole)"""
+    m = trimesh.Trimesh(p, f, process=False)
+    m.merge_vertices(digits_vertex=2)
+    e = np.sort(m.faces[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1)
+    _, eid, cnt = np.unique(e, axis=0, return_inverse=True, return_counts=True)
+    order = np.argsort(eid.ravel(), kind="stable")
+    pair = order[np.repeat(cnt == 2, cnt)].reshape(-1, 2) // 3
+    lab = trimesh.graph.connected_component_labels(pair, node_count=len(m.faces))
+    size = np.bincount(lab)
+    m.update_faces(size[lab] >= 0.1 * size.max())
+    m.remove_unreferenced_vertices()
+    return np.asarray(m.vertices), np.asarray(m.faces)
+
+
+def split_sheath(p, f, border, sg, front_y):
+    """split a flat abdominal muscle into its fleshy part and its aponeurosis (the part in front of front_y and
+    medial to border(z), the rectus sheath). Triangles crossing the line are split on it, so the two parts share
+    the edge's vertices. Returns points, faces with the fleshy faces first, and how many fleshy faces there are."""
     g = np.maximum(p[:, 0] * sg - border(p[:, 2]), p[:, 1] - front_y)
     g[np.abs(g) < 1e-6] = 1e-6
     keep = g > 0
     k = keep[f].sum(axis=1)
-    out = [f[k == 3]]
+    flesh, tendon = [f[k == 3]], [f[k == 0]]
     pts, new = [p], {}
 
     def cross(a, b):   # vertex where edge a-b crosses g = 0
@@ -123,20 +144,11 @@ def cut_sheath(p, f, border, sg, front_y):
         i = int(np.flatnonzero(keep[tri] == (n == 1))[0])
         a, b, c = np.roll(tri, -i)   # a is the lone vertex; rolling keeps the winding
         ab, ac = cross(a, b), cross(a, c)
-        out.append(np.array([[a, ab, ac]]) if n == 1 else np.array([[ab, b, c], [ab, c, ac]]))
-    m = trimesh.Trimesh(np.vstack(pts), np.vstack(out), process=False)
-    m.merge_vertices(digits_vertex=2)
-    # pieces joined only through edges shared by exactly two faces: the scan's loose patches that touch
-    # the sheet at a seam come away with the rest of the scraps
-    e = np.sort(m.faces[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1)
-    _, eid, cnt = np.unique(e, axis=0, return_inverse=True, return_counts=True)
-    order = np.argsort(eid.ravel(), kind="stable")
-    pair = order[np.repeat(cnt == 2, cnt)].reshape(-1, 2) // 3
-    lab = trimesh.graph.connected_component_labels(pair, node_count=len(m.faces))
-    size = np.bincount(lab)
-    m.update_faces(size[lab] >= 0.1 * size.max())
-    m.remove_unreferenced_vertices()
-    return np.asarray(m.vertices), np.asarray(m.faces)
+        lone, rest = np.array([[a, ab, ac]]), np.array([[ab, b, c], [ab, c, ac]])
+        (flesh if n == 1 else tendon).append(lone)
+        (tendon if n == 1 else flesh).append(rest)
+    flesh, tendon = np.vstack(flesh), np.vstack(tendon)
+    return np.vstack(pts), np.vstack([flesh, tendon]), len(flesh)
 
 
 def simplify(p, f, keep, force=False):
@@ -418,12 +430,14 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
                     pe, fe = clip_below(*weld(*muscles[extra.format(s=s_)]), CUT_Z)
                     meshes.append(simplify(pe, fe, REGION_KEEP))
                 p, f = merge(meshes)
+                extra = {}
                 if uid in SHEATH_UNITS:
                     sg = 1.0 if s_ == "left" else -1.0
                     border = rectus_border(*weld(*muscles[SHEATH_BORDER.format(s=s_)]), sg)
-                    p, f = cut_sheath(p, f, border, sg, SHEATH_FRONT_Y)
+                    p, f, nf = split_sheath(*drop_debris(p, f), border, sg, SHEATH_FRONT_Y)
+                    extra["tendon"] = nf
                 idx, w = skin_weights(p, f, [j.format(S=S) for j in joints], trees)
-                parts.append(dict(id=uid, kind="muscle", side=S, name=uid, joint="", region=region, p=p, f=f, skin=(idx, w)))
+                parts.append(dict(id=uid, kind="muscle", side=S, name=uid, joint="", region=region, p=p, f=f, skin=(idx, w), **extra))
 
     # ---------- pack ----------
     levels = []
@@ -455,6 +469,8 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
             "io": put(part["f"].astype("<u4" if big else "<u2")), "u32": bool(big),
             "min": [round(float(x), 4) for x in lo], "max": [round(float(x), 4) for x in hi],
         }
+        if "tendon" in part:
+            entry["tendon"] = int(part["tendon"]) * 3   # indices from here on draw the aponeurosis
         if "skin" in part:
             entry["so"] = put(np.hstack(part["skin"]).astype(np.uint8))   # N x 8: four joint indices, four weights
         out["parts"].append(entry)

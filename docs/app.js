@@ -330,10 +330,24 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Real time: holds last their stated time and the dose is counted, set by set, so you can follow along.
 // Remembered between exercises and visits; storage can throw (private browsing, blocked cookies), so it is optional.
 const REAL_KEY = "atlas.realTime";
-let realTime = false, lastCount = null, lastSess = null, capOverride = false;
+let realTime = false, lastCount = null, lastSess = null, capOverride = false, goPlan = "";
 try { realTime = localStorage.getItem(REAL_KEY) === "1"; } catch (e) { /* not remembered */ }
+// Rest between sets: the user's own choice for every exercise, or null for each exercise's setRest in timing.js.
+const SETREST_KEY = "atlas.setRest", SETREST_CHOICES = [60, 90, 120, 180];
+let setRest = null;
+try { const v = Number(localStorage.getItem(SETREST_KEY)); setRest = SETREST_CHOICES.includes(v) ? v : null; } catch (e) { /* not remembered */ }
+/** the "Rest between sets" pickers: under the big Start while waiting or done, and beside the countdown in a rest between sets */
+function showRestPick(s) {
+  const multi = !!(s && s.setRestBase);
+  for (const sel of document.querySelectorAll("select[data-rest-pick]")) {
+    if (multi) sel.options[0].textContent = `Default (${s.setRestBase} s)`;
+    if (document.activeElement !== sel) sel.value = setRest ? String(setRest) : "";
+  }
+  $("go-rest").classList.toggle("on", multi && (s.state === "waiting" || s.state === "done") && scene === "figure");
+  for (const el of document.querySelectorAll(".rest-pick.in-rest")) el.hidden = !(multi && s.rest && s.rest.kind === "set");
+}
 function applyRealTime() {
-  if (figure) figure.setRealTime(realTime);
+  if (figure) { figure.setRealTime(realTime); figure.setSetRest(setRest); }
   for (const b of document.querySelectorAll('[data-act="real"]')) b.setAttribute("aria-pressed", String(realTime));
   for (const b of $("tools-figure").querySelectorAll("[data-speed]")) b.disabled = realTime;   // speed is for the demonstration only
   if (!realTime) showSession(null);
@@ -355,18 +369,19 @@ function showCount(c) {
     }
     $("caption").classList.toggle("holding", show);
     $("caption").classList.toggle("resting", resting);
+    stage.classList.toggle("rt-count", show);   // on a phone the countdown stands in for the phase pill
     $("caption").querySelector(".count-bar").hidden = !show;
     for (const b of document.querySelectorAll('[data-act="skip-rest"]')) b.hidden = !resting;
   }
   if (show && !reduced) for (const bar of document.querySelectorAll(".count-bar i")) bar.style.transform = `scaleX(${(c.left / c.total).toFixed(4)})`;
 }
 /** the whole dose in words: "2 sets of 8", "3 holds each side", "5, 3 and 1 each side" */
-function doseSummary(s) {
+function doseSummary(s, withRest = true) {
   const p = s.plan;
   if (!p) return "";
   const w = s.unit === "hold" ? "hold" : "rep";
   const t = p.some((n) => n !== p[0]) ? `${p.slice(0, -1).join(", ")} and ${p.at(-1)}` : p.length > 1 ? `${p.length} sets of ${p[0]}` : count(p[0], w);
-  return t + (s.sides > 1 ? " each side" : "");
+  return t + (s.sides > 1 ? " each side" : "") + (withRest && s.setRest ? `, ${s.setRest} s rest` : "");
 }
 /** the session read-outs: rep and set (the tally), the countdown, and the caption during rests and at the end */
 function showSession(info) {
@@ -374,10 +389,11 @@ function showSession(info) {
   if (!s) { showCount(info && info.hold ? { ...info.hold, kind: "hold" } : null); }
   else showCount(s.rest ? s.rest : info.hold ? { ...info.hold, kind: "hold" } : null);
   let k = "", n = "", sub = "", cap = "";
+  if (s) goPlan = doseSummary(s) || "Count as you go";
   if (s) {
     const unit = s.unit === "hold" ? "Hold" : "Rep", next = s.reps ? `${unit.toLowerCase()} ${s.rep} of ${s.reps}` : `${unit.toLowerCase()} ${s.rep}`;
-    if (s.state === "waiting") { k = "Ready"; n = doseSummary(s) || "Count as you go"; sub = "Press Start"; }
-    else if (s.state === "done") { k = "Done"; n = doseSummary(s); cap = `Done: ${doseSummary(s)}. Press Start again for another round.`; }
+    if (s.state === "waiting") { k = "Ready"; n = doseSummary(s, false) || "Count as you go"; sub = "Press Start"; }
+    else if (s.state === "done") { k = "Done"; n = doseSummary(s, false); cap = `Done: ${doseSummary(s)}. Press Start again for another round.`; }
     else {
       k = unit; n = s.reps ? `${s.rep} of ${s.reps}` : String(s.rep);
       sub = [s.sets > 1 ? `Set ${s.set} of ${s.sets}` : "", s.sides > 1 ? (s.side === 1 ? "First side" : "Other side") : ""].filter(Boolean).join(" · ");
@@ -386,9 +402,10 @@ function showSession(info) {
         : s.rest.kind === "set" ? `Rest before set ${s.set} of ${s.sets}.` : `Rest, then ${next}. Let the stretch go.`;
     }
   }
-  const key = s ? [k, n, sub, s.state].join("|") : null;
+  const key = s ? [k, n, sub, s.state, s.rest ? s.rest.kind : "", s.setRest].join("|") : null;
   if (key !== lastSess) {
     lastSess = key;
+    showRestPick(s);
     for (const el of [$("tally"), $("head-tally")]) {
       el.hidden = !s;
       el.querySelector(".tally-k").textContent = k;
@@ -467,7 +484,7 @@ function setScene(next) {
   anatomy.invalidate();
   figure.controls.enabled = scene === "figure";
   if (scene === "anatomy") $("phase").textContent = "";
-  if (scene !== "figure") showSession(null);
+  if (scene !== "figure") { showSession(null); $("btn-go").classList.remove("on"); $("go-rest").classList.remove("on"); }
   $("btn-real-head").parentElement.hidden = scene !== "figure";   // the phone's copy of the toggle sits outside the tools
 }
 
@@ -572,10 +589,19 @@ function updatePlayBtn() {
   const b = $("btn-play");
   const on = figure && figure.isPlaying();
   const st = realTime && figure && figure.sessionState();
-  const label = st === "waiting" ? "Start" : st === "done" ? "Start again" : on ? "Pause" : "Play";
+  const label = st === "waiting" ? "Start" : st === "done" ? "Start again" : on ? "Pause" : st === "run" ? "Resume" : "Play";
   b.innerHTML = (on ? ICON.pause : ICON.play) + label;
   b.setAttribute("aria-label", label);
-  b.classList.toggle("solid", st === "waiting" || st === "done");
+  const ready = st === "waiting" || st === "done";
+  b.classList.toggle("solid", ready || (st === "run" && !on));   // a paused session shows its Play just as plainly
+  // the big Start over the model: a real-time session waits for it, so the player never looks stuck
+  const go = $("btn-go");
+  go.classList.toggle("on", ready && scene === "figure");
+  if (ready) {
+    go.setAttribute("aria-label", `${label}: ${goPlan}`);
+    go.querySelector(".go-t").textContent = label;
+    go.querySelector(".go-plan").textContent = goPlan;
+  }
 }
 
 function updateSteps(info) {
@@ -718,6 +744,13 @@ document.addEventListener("click", (ev) => {
   if ((d.fframe || d.fangle) && figure) { figure.setView(d.fframe, d.fangle); return syncViewButtons(); }
   if (d.view && anatomy) { anatomy.setView(d.view); return setPressed($("tools-anatomy"), "view", d.view); }
   if (d.depth && anatomy) { anatomy.setDepth(Number(d.depth)); return setPressed($("tools-anatomy"), "depth", d.depth); }
+});
+document.addEventListener("change", (ev) => {
+  if (!ev.target.matches("select[data-rest-pick]")) return;
+  setRest = Number(ev.target.value) || null;
+  try { localStorage.setItem(SETREST_KEY, setRest ? String(setRest) : ""); } catch (e) { /* not remembered */ }
+  if (figure) figure.setSetRest(setRest);   // a rest between sets that is running takes the new length now
+  lastSess = null;   // redraw the plan, the pickers and the done line on the next frame
 });
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "/" && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !typing(ev.target)) { ev.preventDefault(); sInput.focus(); sInput.select(); return; }

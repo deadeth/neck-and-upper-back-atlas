@@ -2,7 +2,7 @@
 // selection, layer peeling, picking, camera views and the vertebral level ruler.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { geometry } from "./model.js";
+import { geometry, splitTendon } from "./model.js";
 import { areaSpots } from "./areas.js";
 
 const LAYER_COLOUR = { 1: 0xb44a40, 2: 0xa23c38, 3: 0x8f3436, 4: 0x7c2d35 };
@@ -24,6 +24,15 @@ const HOME_RADIUS = 36;
 const GLOW = 0xff7a1a;      // the "where it hurts" glow
 const MAX_SPOTS = 48;
 const GLOW_FADE = 0.15;     // seconds to fade in or out
+// Aponeuroses (parts flagged `tendon`, the rectus sheath) are a pale translucent sheet. A depth-only pass of every
+// sheet (renderOrder 4, pushed back by two depth units) runs first; then the sheets draw colour (renderOrder 5) only
+// where they are the nearest sheet, and write depth so a second sheet at the same spot can't blend again. Stacked
+// sheets, and the two faces of each, show as one layer whatever the draw order, with no sorting flicker.
+const TENDON = 0xeee3d3;
+const TENDON_OPACITY = 0.34;
+const TENDON_GHOST = 0.06;
+const SHEET_GAP = 3;       // cm: a click on a sheet goes to the muscle this close behind it
+const WHITE = new THREE.Color(0xffffff);
 
 /**
  * @param canvas    the shared canvas
@@ -126,6 +135,10 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
   }
 
   const boneMat = glowable(new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.78, metalness: 0, side: THREE.DoubleSide }));
+  const sheetDepth = new THREE.MeshBasicMaterial({
+    colorWrite: false, transparent: true, depthWrite: true, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: 2,   // just behind, so the colour pass passes its own surface
+  });
   const muscles = [];   // meshes
   const bones = [];
   const byId = new Map();   // muscleId -> [meshes]
@@ -142,14 +155,28 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
       // small lightness shift per muscle so neighbours of the same layer separate
       if (part.side === "L") n++;
       base.offsetHSL(0, 0, ((n * 7) % 5 - 2) * 0.012);
+      const [flesh, sheet] = splitTendon(geo, part);
       const mat = glowable(new THREE.MeshStandardMaterial({ color: base, roughness: 0.56, metalness: 0, side: THREE.DoubleSide }));
-      mesh = new THREE.Mesh(geo, mat);
+      mesh = new THREE.Mesh(flesh, mat);
       mesh.userData.base = base;
       mesh.userData.layer = layer;
       mesh.userData.region = region;
       muscles.push(mesh);
       if (!byId.has(part.id)) byId.set(part.id, []);
       byId.get(part.id).push(mesh);
+      if (sheet) {
+        const tmat = glowable(new THREE.MeshStandardMaterial({
+          color: TENDON, roughness: 0.32, metalness: 0, side: THREE.DoubleSide, transparent: true, depthWrite: true, depthFunc: THREE.LessDepth, opacity: TENDON_OPACITY,
+        }));
+        const t = new THREE.Mesh(sheet, tmat);
+        const depthPass = new THREE.Mesh(sheet, sheetDepth);
+        depthPass.renderOrder = 4;
+        t.add(depthPass);
+        Object.assign(t.userData, { id: part.id, kind: "muscle", tendon: true, depthPass, base: new THREE.Color(TENDON), layer, region });
+        muscles.push(t);
+        byId.get(part.id).push(t);
+        scene.add(t);
+      }
     }
     mesh.userData.id = part.kind === "bone" ? part.name : part.id;
     mesh.userData.kind = part.kind;
@@ -193,6 +220,7 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
       const peeled = layer < depth && !isSel;
       m.visible = !peeled && (!active || active.has(m.userData.region));
       m.userData.ghost = false;
+      if (m.userData.tendon) { paintSheet(m, any, isSel); continue; }
       let opacity = 1;
       if (!any) {
         mat.color.copy(base);
@@ -218,6 +246,30 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
       m.renderOrder = t ? (m.userData.ghost ? 3 : 2) : 0;
     }
     dirty = true;
+  }
+
+  /** an aponeurosis: pale sheet; with a selection, a lighter tint of its muscle's colour or a ghost */
+  function paintSheet(m, any, isSel) {
+    const mat = m.material, { id, base } = m.userData;
+    let opacity = TENDON_OPACITY;
+    if (!any) {
+      mat.color.copy(base);
+      mat.emissive.setHex(0x000000);
+    } else if (isSel) {
+      mat.color.setHex(colourFor(id)).lerp(WHITE, 0.22);
+      mat.emissive.setHex(colourFor(id)).multiplyScalar(0.12);
+      opacity = 0.62;
+    } else {
+      // an unselected sheet never veils a selection beneath it
+      mat.color.copy(base).lerp(DIM, 0.3);
+      mat.emissive.setHex(0x000000);
+      opacity = TENDON_GHOST;
+      m.userData.ghost = true;
+    }
+    if (id === hoverId) mat.emissive.add(new THREE.Color(isSel ? 0x0a3a36 : 0x4a1612));
+    mat.opacity = opacity;
+    m.userData.depthPass.visible = mat.depthWrite = !m.userData.ghost;
+    m.renderOrder = m.userData.ghost ? 3 : 5;
   }
 
   // ---- camera ----
@@ -277,7 +329,13 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
     const solid = [], ghosts = [];
     for (const m of muscles) if (m.visible) (m.userData.ghost ? ghosts : solid).push(m);
     if (boneMat.opacity === 1) for (const b of bones) solid.push(b);
-    let hit = ray.intersectObjects(solid, false)[0];
+    // a translucent sheet passes the click to a muscle just behind it (the rectus under its sheath)
+    let hit = null;
+    for (const x of ray.intersectObjects(solid, false)) {
+      if (x.object.userData.tendon) { hit ||= x; continue; }
+      if (!hit || (x.object.userData.kind === "muscle" && x.distance - hit.distance < SHEET_GAP)) hit = x;
+      break;
+    }
     if (!hit) hit = ray.intersectObjects(ghosts, false)[0];
     if (!hit) return null;
     const { id, kind } = hit.object.userData;

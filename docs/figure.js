@@ -5,7 +5,7 @@
 // Muscles are skinned to the bones they attach to, so they lengthen and shorten with the movement.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { geometry } from "./model.js";
+import { geometry, splitTendon } from "./model.js";
 import { MOVES, BASES, SEAT } from "./moves.js";
 import { REAL } from "./timing.js";
 
@@ -15,6 +15,9 @@ const V3 = THREE.Vector3;
 const LAYER_COLOUR = { 1: 0xb44a40, 2: 0xa23c38, 3: 0x8f3436, 4: 0x7c2d35 };
 const TARGET = 0x14b3a6;
 const DIM = new THREE.Color(0x6f5a5c);
+const TENDON = 0xeee3d3;   // aponeuroses: a pale translucent sheet, drawn as in anatomy.js
+const TENDON_OPACITY = 0.34;
+const WHITE = new THREE.Color(0xffffff);
 
 const PARENT = {
   pelvis: null, l5: "pelvis", l4: "l5", l3: "l4", l2: "l3", l1: "l2", thorax: "l1",
@@ -101,6 +104,8 @@ export function createFigure(canvas, model, buffer, meta) {
     weight: new THREE.MeshStandardMaterial({ color: 0x3d4853, roughness: 0.5 }),
     floor: new THREE.MeshBasicMaterial({ color: 0x8a97a4, transparent: true, opacity: 0.16 }),
     shadow: new THREE.ShadowMaterial({ opacity: 0.2 }),
+    sheetDepth: new THREE.MeshBasicMaterial({ colorWrite: false, transparent: true, depthWrite: true, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: 0, polygonOffsetUnits: 2 }),
   };
   const floor = new THREE.Mesh(new THREE.CircleGeometry(1.7, 64), mats.floor);
   floor.rotation.x = -Math.PI / 2;
@@ -145,13 +150,26 @@ export function createFigure(canvas, model, buffer, meta) {
     for (const part of parts) {
       const layer = meta[part.id] ? meta[part.id].layer : 2;
       const mat = new THREE.MeshStandardMaterial({ color: LAYER_COLOUR[layer], roughness: 0.56, side: THREE.DoubleSide });
-      const m = new THREE.SkinnedMesh(geometry(part, buf, CM, true), mat);
+      const [flesh, sheet] = splitTendon(geometry(part, buf, CM, true), part);
+      const m = new THREE.SkinnedMesh(flesh, mat);
       m.frustumCulled = false;
       m.visible = false;
       m.userData = { id: part.id, side: part.side, layer, region, base: new THREE.Color(LAYER_COLOUR[layer]) };
       scene.add(m);
       m.bind(skeleton, new THREE.Matrix4());   // geometry is in rest coordinates whatever pose the skeleton is in now
       muscles.push(m);
+      if (sheet) {   // the aponeurosis shares the vertices and skin, so it moves with the muscle with no seam
+        const t = new THREE.SkinnedMesh(sheet, new THREE.MeshStandardMaterial({
+          color: TENDON, roughness: 0.32, side: THREE.DoubleSide, transparent: true, depthWrite: true, depthFunc: THREE.LessDepth, opacity: TENDON_OPACITY }));
+        const d = new THREE.SkinnedMesh(sheet, mats.sheetDepth);
+        for (const x of [t, d]) { x.frustumCulled = false; x.bind(skeleton, new THREE.Matrix4()); }
+        d.renderOrder = 4;
+        t.add(d);
+        t.visible = false;
+        t.userData = { ...m.userData, tendon: true, depthPass: d, base: new THREE.Color(TENDON) };
+        scene.add(t);
+        muscles.push(t);
+      }
     }
   }
 
@@ -304,7 +322,7 @@ export function createFigure(canvas, model, buffer, meta) {
   // ---------- player ----------
   let move = null, poses = [], time = 0, playing = true, speed = 1, autoView = null, glowT = 0, ground = 0;
   let real = false, rt = 0, plan = null;   // real-time playback: seconds into the real loop, and its phase timings
-  let session = null, moveId = null;   // real-time session: the reps, rests and changeovers of the dose (see sessionFor)
+  let session = null, moveId = null, setRestChoice = null;   // the user's rest between sets (seconds), null = each move's own   // real-time session: the reps, rests and changeovers of the dose (see sessionFor)
   const view = { frame: "whole", angle: "best" };
   const targetMats = [];
 
@@ -321,6 +339,17 @@ export function createFigure(canvas, model, buffer, meta) {
       m.visible = regions.has(region);
       if (!m.visible) continue;
       const isT = ids.includes(mid) && onSide(m);
+      if (m.userData.tendon) {
+        // a target's sheet is a lighter tint of the target colour; any other sheet is ghosted so it never veils one
+        mat.color.copy(isT ? new THREE.Color(TARGET).lerp(WHITE, 0.22) : base.clone().lerp(DIM, 0.3));
+        mat.emissive.setHex(0);
+        mat.opacity = isT ? 0.62 : 0.06;
+        m.userData.depthPass.visible = mat.depthWrite = isT;
+        m.renderOrder = isT ? 5 : 3;
+        m.castShadow = false;
+        if (isT) targetMats.push(mat);
+        continue;
+      }
       let opacity = 1;
       mat.emissive.setHex(0);
       if (isT) {
@@ -682,12 +711,12 @@ export function createFigure(canvas, model, buffer, meta) {
           }
           if (side < sides && r.sideRest) items.push({ kind: "side", len: r.sideRest });
         }
-        if (s < sets.length - 1 && r.setRest) items.push({ kind: "set", len: r.setRest });
+        if (s < sets.length - 1 && r.setRest) items.push({ kind: "set", len: setRestChoice || r.setRest, base: r.setRest });
       });
       // a rest shows the rep that comes after it
       for (let k = items.length - 1, next = null; k >= 0; k--) if (items[k].kind) items[k].next = next; else next = items[k];
     }
-    return { items, sets: sets ? sets.length : 1, reps: sets, sides, unit: r.unit || "rep", i: 0, t: 0, count: 0, state: "waiting" };
+    return { items, sets: sets ? sets.length : 1, reps: sets, sides, unit: r.unit || "rep", setRest: r.setRest || null, i: 0, t: 0, count: 0, state: "waiting" };
   }
   function restartSession() { Object.assign(session, { i: 0, t: 0, count: 0, state: "run" }); rt = 0; }
   function nextItem() {
@@ -703,7 +732,7 @@ export function createFigure(canvas, model, buffer, meta) {
     while (dt > 0 && S.state === "run") {
       const it = S.items && S.items[S.i];
       if (it && it.kind) {
-        const left = it.len - S.t;
+        const left = Math.max(0, it.len - S.t);   // a rest shortened below the time already spent ends now
         if (dt < left) { S.t += dt; return; }
         dt -= left; nextItem();
       } else {
@@ -721,7 +750,8 @@ export function createFigure(canvas, model, buffer, meta) {
       state: S.state === "run" ? (resting ? "rest" : "rep") : S.state,
       rep: cur.rep, reps: cur.reps, set: cur.set, sets: S.sets, side: cur.side, sides: S.sides, unit: S.unit,
       plan: S.reps, done: S.count,
-      rest: resting ? { kind: it.kind, left: it.len - S.t, total: it.len } : null,
+      setRest: S.setRest && (setRestChoice || S.setRest), setRestBase: S.setRest,
+      rest: resting ? { kind: it.kind, left: Math.max(0, it.len - S.t), total: it.len } : null,
     };
   }
   /** real seconds into the loop -> loop fraction */
@@ -776,6 +806,12 @@ export function createFigure(canvas, model, buffer, meta) {
       on = !!on;
       if (on && !real && move) { rt = 0; time = 0; session = sessionFor(moveId); playing = false; }
       real = on;
+    },
+    /** rest between sets in seconds for every move (null: each move's own setRest). A rest between sets that is
+     *  running takes the new length at once; if that is already used up, it ends on the next frame. */
+    setSetRest(sec) {
+      setRestChoice = sec || null;
+      if (session && session.items) for (const it of session.items) if (it.kind === "set") it.len = setRestChoice || it.base;
     },
     /** end a rest or changeover now */
     skipRest() { if (real && session && session.state === "run" && session.items && session.items[session.i].kind) nextItem(); },

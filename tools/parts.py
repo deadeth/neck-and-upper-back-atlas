@@ -123,10 +123,11 @@ REGION_UNITS = {
 # extra sources that only contribute their part below the neck atlas's cut (the lumbar half of the long back extensors)
 BELOW_CUT = {"lumbar-erectors": ["{s} longissimus thoracis", "{s} spinalis thoracis"]}
 REGION_KEEP = 0.5
-# The scanned flat abdominal muscles carry their aponeuroses, which form the rectus sheath and cover the
-# rectus abdominis. Cut each away medial to the rectus's lateral border (the linea semilunaris), measured
-# height by height from the same side's rectus mesh; only the front of the trunk (source y below
-# SHEATH_FRONT_Y, mm) is cut, so the posterior attachments stay.
+# The scanned flat abdominal muscles carry their aponeuroses, which form the rectus sheath in front of the
+# rectus abdominis. Each is split (not cut) along the rectus's lateral border (the linea semilunaris), measured
+# height by height from the same side's rectus mesh: the part medial to it and in front of SHEATH_FRONT_Y (source
+# y, mm) is flagged as tendon, so the atlas can draw it as a pale translucent sheet; the posterior attachments
+# stay fleshy. Any muscle could flag an aponeurosis the same way through a part's `tendon` field.
 SHEATH_UNITS = ("external-oblique", "internal-oblique", "transversus-abdominis")
 SHEATH_BORDER = "{s} rectus abdominis"
 SHEATH_FRONT_Y = -110.0
