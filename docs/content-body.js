@@ -661,15 +661,24 @@ export const BODY_MUSCLES = [
 ];
 
 // Each pattern lists muscles from most to least likely, with the reason. These are muscles worth considering, not a diagnosis.
+// A "where" pattern also has `area`: the part of the body its name and note describe, lit on the model while its chip
+// is hovered (anatomy.js areaSpots). It is a list of soft spheres, { at, to?, f?, off?, r }, in model centimetres:
+//   at, to  landmarks from model.json rig: head, c1..c7, thorax, l1..l5, pelvis, and the paired clav, scap, hum (shoulder
+//           joint), ulna (elbow), rad, hand (wrist), fem (hip joint), tib (knee), foot (ankle), toes, acrom (shoulder tip),
+//           named without their L/R side
+//   f       how far from `at` towards `to` (default 0); a pair [from, to] makes a chain of overlapping spots along that stretch
+//   off     [x, y, z] added after, x outwards from the midline, y up, z forwards (default none)
+//   r       radius: full glow out to 0.4 r, fading to nothing at r
+// Every spot is drawn on both sides of the body; a spot on the midline is drawn once.
 export const BODY_PATTERNS = [
-  { id: "core-across", region: "core", kind: "where", name: "Across the lower back", note: "A band of ache on both sides of the spine. Back pain like this often eases within a few weeks.", aliases: ["lower back pain", "back pain", "lumbago", "backache"], muscles: [
+  { id: "core-across", region: "core", kind: "where", name: "Across the lower back", note: "A band of ache on both sides of the spine. Back pain like this often eases within a few weeks.", area: [{ at: "l1", to: "l5", f: [0, 1], off: [3.5, 0, -8.5], r: 5.5 }], aliases: ["lower back pain", "back pain", "lumbago", "backache"], muscles: [
     { id: "lumbar-erectors", why: "The broad band either side of the spine" },
     { id: "multifidus", why: "Deep ache close to the spine" },
     { id: "rectus-abdominis", why: "Can refer a band of ache across the back" },
     { id: "iliopsoas", why: "Pulls on the lower spine from the front" },
     { id: "quadratus-lumborum", why: "Usually one-sided, but can be both" },
   ] },
-  { id: "core-one-side", region: "core", kind: "where", name: "One side, above the hip", note: "Between the lowest rib and the top of the pelvis.", aliases: ["one sided back pain", "ql pain", "lower back pain"], muscles: [
+  { id: "core-one-side", region: "core", kind: "where", name: "One side, above the hip", note: "Between the lowest rib and the top of the pelvis.", area: [{ at: "l1", to: "l3", f: [0.2, 1], off: [8, 0, -6], r: 5 }], aliases: ["one sided back pain", "ql pain", "lower back pain"], muscles: [
     { id: "quadratus-lumborum", why: "Sits right there, a deep one-sided ache" },
     { id: "lumbar-erectors", why: "The outer column beside the spine" },
     { id: "internal-oblique", why: "Attaches along the pelvic rim" },
@@ -677,21 +686,21 @@ export const BODY_PATTERNS = [
     { id: "multifidus", why: "Narrow ache tight against the spine" },
     { id: "latissimus-dorsi", why: "Its lowest fibres reach the pelvis" },
   ] },
-  { id: "core-groin", region: "core", kind: "where", name: "Front of the hip or groin", note: "Groin pain is often the hip joint or a hernia rather than a muscle. See a GP if there's a lump, swelling or fever, or if the pain makes you limp.", aliases: ["groin pain", "hip flexor pain", "hernia"], muscles: [
+  { id: "core-groin", region: "core", kind: "where", name: "Front of the hip or groin", note: "Groin pain is often the hip joint or a hernia rather than a muscle. See a GP if there's a lump, swelling or fever, or if the pain makes you limp.", area: [{ at: "fem", off: [0, 0, 6], r: 5 }, { at: "fem", off: [-3, -4, 5], r: 4 }], aliases: ["groin pain", "hip flexor pain", "hernia"], muscles: [
     { id: "iliopsoas", why: "Can refer to the groin and front of the thigh" },
     { id: "internal-oblique", why: "Can refer to the groin and lower belly" },
     { id: "transversus-abdominis", why: "Deep ache low in the belly and groin" },
     { id: "external-oblique", why: "Can refer into the groin" },
     { id: "rectus-abdominis", why: "Its lower end sits just above the pubic bone" },
   ] },
-  { id: "core-flank", region: "core", kind: "where", name: "Side of the trunk", note: "Waist, flank or lower ribs. Sudden flank pain with a fever, blood in your pee or feeling sick may be a kidney problem, so call your GP or NHS 111 the same day.", aliases: ["flank pain", "side pain", "kidney pain", "waist pain"], muscles: [
+  { id: "core-flank", region: "core", kind: "where", name: "Side of the trunk", note: "Waist, flank or lower ribs. Sudden flank pain with a fever, blood in your pee or feeling sick may be a kidney problem, so call your GP or NHS 111 the same day.", area: [{ at: "thorax", to: "l4", f: [0, 1], off: [12.5, 2, 1], r: 5.5 }], aliases: ["flank pain", "side pain", "kidney pain", "waist pain"], muscles: [
     { id: "external-oblique", why: "The outer layer at the side of the belly" },
     { id: "internal-oblique", why: "The layer beneath, same area" },
     { id: "quadratus-lumborum", why: "Near the lowest rib at the back" },
     { id: "latissimus-dorsi", why: "Covers the lower ribs at the back and side" },
     { id: "lumbar-erectors", why: "The outer column attaches to the ribs" },
   ] },
-  { id: "core-buttock-leg", region: "core", kind: "where", name: "Into the buttock or leg", note: "Pain below the knee, pins and needles, numbness or weakness in the leg is more often a nerve than a muscle, and no exercise here treats it. See a GP or physio. If both legs are affected, check the warning signs for this region now.", aliases: ["sciatica", "trapped nerve", "leg pain", "pins and needles"], muscles: [
+  { id: "core-buttock-leg", region: "core", kind: "where", name: "Into the buttock or leg", note: "Pain below the knee, pins and needles, numbness or weakness in the leg is more often a nerve than a muscle, and no exercise here treats it. See a GP or physio. If both legs are affected, check the warning signs for this region now.", area: [{ at: "fem", off: [-2, 2, -7], r: 7 }, { at: "fem", to: "tib", f: [0.15, 1], off: [0, 0, -4], r: 6 }, { at: "tib", to: "foot", f: [0, 0.4], off: [0, 0, -4], r: 5.5 }], aliases: ["sciatica", "trapped nerve", "leg pain", "pins and needles"], muscles: [
     { id: "quadratus-lumborum", why: "Can refer to the buttock and side of the hip" },
     { id: "lumbar-erectors", why: "The lowest fibres can refer to the buttock" },
     { id: "multifidus", why: "Low slips can refer to the sacrum and buttock" },
@@ -731,21 +740,21 @@ export const BODY_PATTERNS = [
     { id: "iliopsoas", why: "Lying flat stretches it if it's tight" },
     { id: "quadratus-lumborum", why: "Can stiffen after a night on one side" },
   ] },
-  { id: "shoulder-front", region: "shoulder", kind: "where", name: "Front of the shoulder", note: "Around the front of the joint and the top of the upper arm. Rotator cuff or biceps tendon problems, bursitis and impingement are at least as likely as a muscle, so see a GP or physio if it isn't easing after 2 weeks.", aliases: ["shoulder pain", "impingement", "biceps tendon", "sore shoulder"], muscles: [
+  { id: "shoulder-front", region: "shoulder", kind: "where", name: "Front of the shoulder", note: "Around the front of the joint and the top of the upper arm. Rotator cuff or biceps tendon problems, bursitis and impingement are at least as likely as a muscle, so see a GP or physio if it isn't easing after 2 weeks.", area: [{ at: "hum", off: [0, -1, 4], r: 5 }, { at: "hum", off: [0.5, -6, 3.5], r: 4.5 }], aliases: ["shoulder pain", "impingement", "biceps tendon", "sore shoulder"], muscles: [
     { id: "deltoid-anterior", why: "Lifts the arm forward, aches when overloaded" },
     { id: "biceps-brachii", why: "Its long tendon runs over the front" },
     { id: "pectoralis-minor", why: "Attaches here, tight with rounded shoulders" },
     { id: "subscapularis", why: "Front rotator cuff muscle, a deep ache" },
     { id: "coracobrachialis", why: "Small muscle high on the inner arm" },
   ] },
-  { id: "shoulder-outer", region: "shoulder", kind: "where", name: "Top and outside of the shoulder", note: "Over the point of the shoulder and down the outer upper arm. A painful arc as you lift usually means the rotator cuff tendons, pain right over the end of the collarbone can be that joint, and a shoulder that's stiff in every direction may be frozen shoulder, which isn't a muscle problem.", aliases: ["frozen shoulder", "rotator cuff", "painful arc", "shoulder pain", "upper arm pain"], muscles: [
+  { id: "shoulder-outer", region: "shoulder", kind: "where", name: "Top and outside of the shoulder", note: "Over the point of the shoulder and down the outer upper arm. A painful arc as you lift usually means the rotator cuff tendons, pain right over the end of the collarbone can be that joint, and a shoulder that's stiff in every direction may be frozen shoulder, which isn't a muscle problem.", area: [{ at: "acrom", off: [2, 0.5, 0], r: 4.5 }, { at: "hum", to: "ulna", f: [0, 0.45], off: [5.5, 0, 0], r: 4.5 }], aliases: ["frozen shoulder", "rotator cuff", "painful arc", "shoulder pain", "upper arm pain"], muscles: [
     { id: "deltoid-middle", why: "Covers the outer shoulder, lifts the arm sideways" },
     { id: "supraspinatus", why: "Starts the lift, the commonest cuff problem" },
     { id: "upper-trapezius", why: "Top of the shoulder, felt towards the neck" },
     { id: "infraspinatus", why: "Often felt in the outer shoulder" },
     { id: "teres-minor", why: "Deep cuff muscle, weaker evidence" },
   ] },
-  { id: "shoulder-back", region: "shoulder", kind: "where", name: "Back of the shoulder", note: "Behind the joint and across the shoulder blade. Pain here can come from the neck, and pain between the shoulder blades can come from the chest, including the heart, so check the warning signs if you also feel unwell or breathless.", aliases: ["rear shoulder", "shoulder blade pain", "shoulder pain"], muscles: [
+  { id: "shoulder-back", region: "shoulder", kind: "where", name: "Back of the shoulder", note: "Behind the joint and across the shoulder blade. Pain here can come from the neck, and pain between the shoulder blades can come from the chest, including the heart, so check the warning signs if you also feel unwell or breathless.", area: [{ at: "hum", off: [-1, -1, -5.5], r: 4.5 }, { at: "scap", off: [-1, -4, -6.5], r: 6 }], aliases: ["rear shoulder", "shoulder blade pain", "shoulder pain"], muscles: [
     { id: "deltoid-posterior", why: "Rear fibres, worked by rows and reaching back" },
     { id: "infraspinatus", why: "Covers the back of the shoulder blade" },
     { id: "teres-minor", why: "Turns the arm outward, beside infraspinatus" },
@@ -753,26 +762,26 @@ export const BODY_PATTERNS = [
     { id: "triceps-brachii", why: "Long head reaches up to the shoulder blade" },
     { id: "rhomboid-major", why: "Between spine and blade, mistaken for shoulder pain" },
   ] },
-  { id: "shoulder-chest", region: "shoulder", kind: "where", name: "Chest", note: "New chest pain is a heart, lung or gullet question until a doctor says otherwise, so check the warning signs first. A muscle only fits pain that came on after effort, such as pressing or lifting, and eases with rest.", aliases: ["chest pain", "pulled pec", "chest strain", "sore chest", "rib pain"], muscles: [
+  { id: "shoulder-chest", region: "shoulder", kind: "where", name: "Chest", note: "New chest pain is a heart, lung or gullet question until a doctor says otherwise, so check the warning signs first. A muscle only fits pain that came on after effort, such as pressing or lifting, and eases with rest.", area: [{ at: "clav", off: [6, -7, 6], r: 6.5 }, { at: "c7", off: [0, -12, 13], r: 5 }], aliases: ["chest pain", "pulled pec", "chest strain", "sore chest", "rib pain"], muscles: [
     { id: "pectoralis-major", why: "The large chest muscle, strained by pressing" },
     { id: "serratus-anterior", why: "Side of the ribs, sore after push-ups" },
     { id: "pectoralis-minor", why: "Upper chest, under the main muscle" },
     { id: "subscapularis", why: "Occasionally felt towards the front of the chest" },
   ] },
-  { id: "shoulder-front-arm", region: "shoulder", kind: "where", name: "Front of the upper arm", note: "Down the front of the arm to the crook of the elbow. A sudden pop with a new bulge can be a torn tendon, so see a GP soon, and an ache that comes on with effort and eases with rest can be the heart, so contact a GP or NHS 111 the same day.", aliases: ["biceps pain", "elbow crease", "upper arm pain", "torn biceps"], muscles: [
+  { id: "shoulder-front-arm", region: "shoulder", kind: "where", name: "Front of the upper arm", note: "Down the front of the arm to the crook of the elbow. A sudden pop with a new bulge can be a torn tendon, so see a GP soon, and an ache that comes on with effort and eases with rest can be the heart, so contact a GP or NHS 111 the same day.", area: [{ at: "hum", to: "ulna", f: [0.25, 1], off: [0, 0, 3.5], r: 4 }], aliases: ["biceps pain", "elbow crease", "upper arm pain", "torn biceps"], muscles: [
     { id: "biceps-brachii", why: "The front bulk, felt in the crook of the elbow" },
     { id: "brachialis", why: "Deep under the biceps, the main elbow bender" },
     { id: "coracobrachialis", why: "High on the front and inner upper arm" },
     { id: "brachioradialis", why: "Reaches the outer side of the elbow crease" },
     { id: "deltoid-anterior", why: "Shoulder pain often runs down the front" },
   ] },
-  { id: "shoulder-outer-elbow", region: "shoulder", kind: "where", name: "Outer elbow and forearm", note: "Pain at the bony bump on the outside of the elbow is often tennis elbow, a tendon problem from repeated gripping and twisting rather than a muscle on its own. A trapped nerve in the neck can feel similar, so see a GP if it isn't better after 2 weeks of easing off.", aliases: ["tennis elbow", "lateral epicondylitis", "elbow pain", "forearm pain"], muscles: [
+  { id: "shoulder-outer-elbow", region: "shoulder", kind: "where", name: "Outer elbow and forearm", note: "Pain at the bony bump on the outside of the elbow is often tennis elbow, a tendon problem from repeated gripping and twisting rather than a muscle on its own. A trapped nerve in the neck can feel similar, so see a GP if it isn't better after 2 weeks of easing off.", area: [{ at: "ulna", off: [3.5, 1, 0], r: 3.5 }, { at: "ulna", to: "hand", f: [0.05, 0.5], off: [3.5, 0, -1], r: 3.5 }], aliases: ["tennis elbow", "lateral epicondylitis", "elbow pain", "forearm pain"], muscles: [
     { id: "forearm-extensors", why: "All start at the outer elbow bump" },
     { id: "brachioradialis", why: "Outer elbow and the thumb side of the forearm" },
     { id: "triceps-brachii", why: "Can refer to the outer elbow" },
     { id: "deltoid-middle", why: "Outer arm pain carried down from the shoulder" },
   ] },
-  { id: "shoulder-inner-elbow", region: "shoulder", kind: "where", name: "Inner elbow and forearm", note: "Pain at the bump on the inside of the elbow is often golfer's elbow, mainly a tendon problem. Tingling in the ring and little fingers, or in the palm and middle fingers, points to a nerve rather than a muscle, so see a GP.", aliases: ["golfers elbow", "medial epicondylitis", "elbow pain", "forearm pain", "wrist pain"], muscles: [
+  { id: "shoulder-inner-elbow", region: "shoulder", kind: "where", name: "Inner elbow and forearm", note: "Pain at the bump on the inside of the elbow is often golfer's elbow, mainly a tendon problem. Tingling in the ring and little fingers, or in the palm and middle fingers, points to a nerve rather than a muscle, so see a GP.", area: [{ at: "ulna", off: [-3.5, 0, 0], r: 3.5 }, { at: "ulna", to: "hand", f: [0.1, 0.5], off: [-2, 0, 3], r: 3.5 }], aliases: ["golfers elbow", "medial epicondylitis", "elbow pain", "forearm pain", "wrist pain"], muscles: [
     { id: "forearm-flexors", why: "All start at the inner elbow bump" },
     { id: "biceps-brachii", why: "Crook of the elbow and front of the forearm" },
     { id: "brachialis", why: "Deep at the front of the elbow" },
@@ -805,39 +814,39 @@ export const BODY_PATTERNS = [
     { id: "biceps-brachii", why: "Carrying with a bent elbow, and twisting" },
     { id: "brachialis", why: "Bends the elbow under load" },
   ] },
-  { id: "hip-outer", region: "hip", kind: "where", name: "Outer hip", note: "Over the bony point at the side of the hip. Most often this is the gluteal tendons and the bursa over that point, sometimes called hip bursitis, or arthritis, so see a GP if it isn't better after 2 weeks.", aliases: ["hip bursitis", "trochanteric bursitis", "gluteal tendinopathy", "side of hip", "hip pain"], muscles: [
+  { id: "hip-outer", region: "hip", kind: "where", name: "Outer hip", note: "Over the bony point at the side of the hip. Most often this is the gluteal tendons and the bursa over that point, sometimes called hip bursitis, or arthritis, so see a GP if it isn't better after 2 weeks.", area: [{ at: "fem", off: [6, -2.5, -1.5], r: 5.5 }], aliases: ["hip bursitis", "trochanteric bursitis", "gluteal tendinopathy", "side of hip", "hip pain"], muscles: [
     { id: "gluteus-medius", why: "Its tendon attaches at the bony point" },
     { id: "gluteus-minimus", why: "Deeper, same attachment" },
     { id: "tensor-fasciae-latae", why: "Front and outer hip" },
     { id: "piriformis", why: "Deep, just behind the bony point" },
     { id: "quadratus-lumborum", why: "Can refer from the flank to the hip" },
   ] },
-  { id: "hip-buttock", region: "hip", kind: "where", name: "Deep in the buttock", note: "A deep ache in the middle of the buttock. Sciatica, the sacroiliac joint and the lower back often show up here, and piriformis syndrome is a debated label, so see a GP or physio if it spreads down the leg.", aliases: ["buttock pain", "sore bum", "glute pain", "piriformis syndrome"], muscles: [
+  { id: "hip-buttock", region: "hip", kind: "where", name: "Deep in the buttock", note: "A deep ache in the middle of the buttock. Sciatica, the sacroiliac joint and the lower back often show up here, and piriformis syndrome is a debated label, so see a GP or physio if it spreads down the leg.", area: [{ at: "fem", off: [-1.5, 1, -9], r: 5.5 }], aliases: ["buttock pain", "sore bum", "glute pain", "piriformis syndrome"], muscles: [
     { id: "piriformis", why: "Deep in the buttock, often blamed, link debated" },
     { id: "deep-rotators", why: "Deep, hard to tell from piriformis" },
     { id: "gluteus-medius", why: "Back and side of the buttock" },
     { id: "gluteus-maximus", why: "The bulk of the buttock, after sitting or climbing" },
     { id: "lumbar-erectors", why: "Back pain often refers to the buttock" },
   ] },
-  { id: "hip-sit-bone", region: "hip", kind: "where", name: "Sitting bone", note: "The bony point you sit on, often worse on hard seats. A hamstring tendon problem or an irritated bursa there is a common cause.", aliases: ["sit bone", "high hamstring", "pain when sitting", "ischial bursitis"], muscles: [
+  { id: "hip-sit-bone", region: "hip", kind: "where", name: "Sitting bone", note: "The bony point you sit on, often worse on hard seats. A hamstring tendon problem or an irritated bursa there is a common cause.", area: [{ at: "fem", off: [-3.5, -6, -5], r: 5 }], aliases: ["sit bone", "high hamstring", "pain when sitting", "ischial bursitis"], muscles: [
     { id: "gluteus-maximus", why: "Lower fibres cover the sitting bone" },
     { id: "deep-rotators", why: "Start close by" },
     { id: "biceps-femoris", why: "The hamstrings start on the sitting bone" },
     { id: "medial-hamstrings", why: "Same starting point" },
   ] },
-  { id: "hip-groin", region: "hip", kind: "where", name: "Groin and inner thigh", note: "Groin pain is often the hip joint, classically arthritis, or a hernia rather than a muscle. See a GP if there's a lump or swelling, a fever, or a limp.", aliases: ["groin strain", "pulled groin", "groin pain", "adductor strain"], muscles: [
+  { id: "hip-groin", region: "hip", kind: "where", name: "Groin and inner thigh", note: "Groin pain is often the hip joint, classically arthritis, or a hernia rather than a muscle. See a GP if there's a lump or swelling, a fever, or a limp.", area: [{ at: "fem", off: [-3, -3, 5], r: 4.5 }, { at: "fem", to: "tib", f: [0.08, 0.45], off: [-5.5, 0, 1.5], r: 4.5 }], aliases: ["groin strain", "pulled groin", "groin pain", "adductor strain"], muscles: [
     { id: "adductors", why: "Inner thigh up to the pubic bone" },
     { id: "iliopsoas", why: "Deep front of the hip and groin" },
     { id: "tensor-fasciae-latae", why: "Front of the hip" },
     { id: "rectus-femoris", why: "Front of the hip, from kicking or sprinting" },
   ] },
-  { id: "hip-front", region: "hip", kind: "where", name: "Front of the hip", note: "Deep in the crease at the front of the hip. Hip arthritis often starts here, with stiffness and pain into the groin, so see a GP if it's stopping you doing things or isn't better after 2 weeks.", aliases: ["hip flexor strain", "hip flexor pain", "tight hip flexors", "hip arthritis"], muscles: [
+  { id: "hip-front", region: "hip", kind: "where", name: "Front of the hip", note: "Deep in the crease at the front of the hip. Hip arthritis often starts here, with stiffness and pain into the groin, so see a GP if it's stopping you doing things or isn't better after 2 weeks.", area: [{ at: "fem", off: [0, -1, 5], r: 6.5 }], aliases: ["hip flexor strain", "hip flexor pain", "tight hip flexors", "hip arthritis"], muscles: [
     { id: "iliopsoas", why: "Deep at the front of the hip" },
     { id: "tensor-fasciae-latae", why: "Front and outer edge" },
     { id: "rectus-femoris", why: "Sprinting and kicking strain it here" },
     { id: "sartorius", why: "Starts at the front point of the pelvis" },
   ] },
-  { id: "hip-into-leg", region: "hip", kind: "where", name: "Buttock into the back of the leg", note: "Pain that runs below the knee with burning, tingling, numbness or weakness is most likely sciatica, a nerve problem that no exercise here treats. See a GP or physio, and if both legs are affected, check the warning signs now.", aliases: ["sciatica", "leg pain", "pain down the leg", "trapped nerve", "pseudo sciatica"], muscles: [
+  { id: "hip-into-leg", region: "hip", kind: "where", name: "Buttock into the back of the leg", note: "Pain that runs below the knee with burning, tingling, numbness or weakness is most likely sciatica, a nerve problem that no exercise here treats. See a GP or physio, and if both legs are affected, check the warning signs now.", area: [{ at: "fem", off: [-2, 2, -7], r: 7 }, { at: "fem", to: "tib", f: [0.15, 0.95], off: [0, 0, -4], r: 6 }], aliases: ["sciatica", "leg pain", "pain down the leg", "trapped nerve", "pseudo sciatica"], muscles: [
     { id: "piriformis", why: "Deep buttock, close to the sciatic nerve" },
     { id: "deep-rotators", why: "Same area, hard to tell apart" },
     { id: "gluteus-minimus", why: "Can refer down the outer thigh, like sciatica" },
@@ -876,19 +885,19 @@ export const BODY_PATTERNS = [
     { id: "gluteus-medius", why: "Slow to take the load" },
     { id: "adductors", why: "Stiff on the inside of the thigh" },
   ] },
-  { id: "leg-front-thigh", region: "leg", kind: "where", name: "Front of the thigh", note: "The big muscles above the knee. A sudden sharp pain while sprinting or kicking fits a muscle strain, while an ache with no clear cause can be referred from the hip or lower back.", aliases: ["thigh pain", "quad strain", "pulled quad", "sore quads"], muscles: [
+  { id: "leg-front-thigh", region: "leg", kind: "where", name: "Front of the thigh", note: "The big muscles above the knee. A sudden sharp pain while sprinting or kicking fits a muscle strain, while an ache with no clear cause can be referred from the hip or lower back.", area: [{ at: "fem", to: "tib", f: [0.15, 0.95], off: [1.5, 0, 6], r: 5.5 }], aliases: ["thigh pain", "quad strain", "pulled quad", "sore quads"], muscles: [
     { id: "rectus-femoris", why: "Crosses hip and knee, strained sprinting and kicking" },
     { id: "vasti", why: "The bulk of the thigh, loaded by squats and stairs" },
     { id: "sartorius", why: "Thin diagonal strip, less likely" },
     { id: "tensor-fasciae-latae", why: "Front and outer upper thigh" },
   ] },
-  { id: "leg-back-thigh", region: "leg", kind: "where", name: "Back of the thigh", note: "A sudden sharp pain at the back of the thigh while sprinting or stretching fits a hamstring strain, one of the clearer muscle injuries. An ache with tingling, or pain that runs below the knee, is more often sciatica.", aliases: ["pulled hamstring", "hamstring strain", "torn hamstring", "hamstring pain"], muscles: [
+  { id: "leg-back-thigh", region: "leg", kind: "where", name: "Back of the thigh", note: "A sudden sharp pain at the back of the thigh while sprinting or stretching fits a hamstring strain, one of the clearer muscle injuries. An ache with tingling, or pain that runs below the knee, is more often sciatica.", area: [{ at: "fem", to: "tib", f: [0.2, 0.92], off: [0, 0, -4], r: 6 }], aliases: ["pulled hamstring", "hamstring strain", "torn hamstring", "hamstring pain"], muscles: [
     { id: "biceps-femoris", why: "Outer hamstring, strained sprinting or overstretching" },
     { id: "medial-hamstrings", why: "Inner hamstring" },
     { id: "gluteus-maximus", why: "Upper back of the thigh" },
     { id: "adductors", why: "The rear part of adductor magnus" },
   ] },
-  { id: "leg-knee", region: "leg", kind: "where", name: "Around the knee", note: "Knee pain is mostly the joint, cartilage, ligaments, tendons or kneecap, so the muscles here are a minor and uncertain guess. If it locks, gives way or swells badly, contact a GP or NHS 111 the same day, and see a GP if it isn't better within a few weeks.", aliases: ["knee pain", "runners knee", "kneecap pain", "patellofemoral pain", "jumpers knee"], muscles: [
+  { id: "leg-knee", region: "leg", kind: "where", name: "Around the knee", note: "Knee pain is mostly the joint, cartilage, ligaments, tendons or kneecap, so the muscles here are a minor and uncertain guess. If it locks, gives way or swells badly, contact a GP or NHS 111 the same day, and see a GP if it isn't better within a few weeks.", area: [{ at: "tib", off: [0, 1, 1.5], r: 6.5 }], aliases: ["knee pain", "runners knee", "kneecap pain", "patellofemoral pain", "jumpers knee"], muscles: [
     { id: "vasti", why: "Kneecap and front of the knee" },
     { id: "rectus-femoris", why: "Front of the knee" },
     { id: "biceps-femoris", why: "Outer back of the knee" },
@@ -896,24 +905,24 @@ export const BODY_PATTERNS = [
     { id: "gastrocnemius", why: "Back of the knee" },
     { id: "sartorius", why: "Inner side of the knee" },
   ] },
-  { id: "leg-calf", region: "leg", kind: "where", name: "Calf", note: "A painful, swollen calf in one leg can be a blood clot, so check the warning signs first. A sudden snap at the back of the calf or heel can be a torn Achilles tendon, which needs urgent care.", aliases: ["calf pain", "calf strain", "pulled calf", "torn calf", "blood clot", "dvt"], muscles: [
+  { id: "leg-calf", region: "leg", kind: "where", name: "Calf", note: "A painful, swollen calf in one leg can be a blood clot, so check the warning signs first. A sudden snap at the back of the calf or heel can be a torn Achilles tendon, which needs urgent care.", area: [{ at: "tib", to: "foot", f: [0.12, 0.6], off: [0, 0, -5], r: 5 }], aliases: ["calf pain", "calf strain", "pulled calf", "torn calf", "blood clot", "dvt"], muscles: [
     { id: "gastrocnemius", why: "Upper calf, strained sprinting and on hills" },
     { id: "soleus", why: "Lower calf, long standing and walking" },
     { id: "tibialis-posterior", why: "Deep calf towards the inner shin" },
   ] },
-  { id: "leg-shin", region: "leg", kind: "where", name: "Shin", note: "Shin splints are an overload problem of the bone and the tissue around it, not just a muscle. Pain at one spot on the bone, or pain that's worse at rest or at night, could be a stress fracture, so see a GP.", aliases: ["shin splints", "shin pain", "medial tibial stress syndrome", "stress fracture"], muscles: [
+  { id: "leg-shin", region: "leg", kind: "where", name: "Shin", note: "Shin splints are an overload problem of the bone and the tissue around it, not just a muscle. Pain at one spot on the bone, or pain that's worse at rest or at night, could be a stress fracture, so see a GP.", area: [{ at: "tib", to: "foot", f: [0.12, 0.85], off: [-0.5, 0, 4], r: 3.5 }], aliases: ["shin splints", "shin pain", "medial tibial stress syndrome", "stress fracture"], muscles: [
     { id: "tibialis-anterior", why: "Front and outer shin" },
     { id: "tibialis-posterior", why: "Deep, along the inner shin" },
     { id: "fibulares", why: "Outer lower leg" },
   ] },
-  { id: "leg-ankle-heel", region: "leg", kind: "where", name: "Ankle and heel", note: "Heel pain is more often plantar fasciitis or an Achilles tendon problem than a muscle. After a fall or a twist, a broken ankle or heel is possible, so check the warning signs.", aliases: ["ankle pain", "heel pain", "achilles", "achilles tendinopathy", "sprained ankle"], muscles: [
+  { id: "leg-ankle-heel", region: "leg", kind: "where", name: "Ankle and heel", note: "Heel pain is more often plantar fasciitis or an Achilles tendon problem than a muscle. After a fall or a twist, a broken ankle or heel is possible, so check the warning signs.", area: [{ at: "foot", r: 4.5 }, { at: "foot", off: [0, -3, -4], r: 3.5 }, { at: "foot", off: [0, 4, -4], r: 3 }], aliases: ["ankle pain", "heel pain", "achilles", "achilles tendinopathy", "sprained ankle"], muscles: [
     { id: "soleus", why: "Lower calf into the heel" },
     { id: "gastrocnemius", why: "Along the line of the Achilles" },
     { id: "tibialis-posterior", why: "Behind the inner ankle bone" },
     { id: "fibulares", why: "Behind the outer ankle bone" },
     { id: "tibialis-anterior", why: "Front of the ankle" },
   ] },
-  { id: "leg-foot", region: "leg", kind: "where", name: "Arch and sole of the foot", note: "Plantar fasciitis, in the tough tissue under the foot, is the commonest cause of pain under the heel and arch, and it's typically worst on the first steps after rest. The small muscles inside the foot aren't in this atlas.", aliases: ["foot pain", "arch pain", "plantar fasciitis", "sole pain"], muscles: [
+  { id: "leg-foot", region: "leg", kind: "where", name: "Arch and sole of the foot", note: "Plantar fasciitis, in the tough tissue under the foot, is the commonest cause of pain under the heel and arch, and it's typically worst on the first steps after rest. The small muscles inside the foot aren't in this atlas.", area: [{ at: "foot", to: "toes", f: [0, 1], off: [-1, -2, -1.5], r: 4.5 }], aliases: ["foot pain", "arch pain", "plantar fasciitis", "sole pain"], muscles: [
     { id: "tibialis-posterior", why: "Supports the inner arch" },
     { id: "fibulares", why: "Outer foot, and longus runs under the arch" },
     { id: "gastrocnemius", why: "Sometimes felt in the arch, a weak link" },

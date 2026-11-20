@@ -327,27 +327,84 @@ const ensure = (list) => Promise.all(list.map(loadRegion));
 let scene = "anatomy", lastStep = -1, lastLabel = null, syncToken = 0;
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// Real time: holds last their stated time so you can follow along. Remembered between exercises and visits;
-// storage can throw (private browsing, blocked cookies), so it is optional.
+// Real time: holds last their stated time and the dose is counted, set by set, so you can follow along.
+// Remembered between exercises and visits; storage can throw (private browsing, blocked cookies), so it is optional.
 const REAL_KEY = "atlas.realTime";
-let realTime = false, lastLeft = null;
+let realTime = false, lastCount = null, lastSess = null, capOverride = false;
 try { realTime = localStorage.getItem(REAL_KEY) === "1"; } catch (e) { /* not remembered */ }
 function applyRealTime() {
   if (figure) figure.setRealTime(realTime);
   for (const b of document.querySelectorAll('[data-act="real"]')) b.setAttribute("aria-pressed", String(realTime));
   for (const b of $("tools-figure").querySelectorAll("[data-speed]")) b.disabled = realTime;   // speed is for the demonstration only
-  if (!realTime) showHold(null);
+  if (!realTime) showSession(null);
+  updatePlayBtn();
 }
-/** the hold countdown: whole seconds left, and a bar that shrinks over the hold. Short pauses go without. */
-function showHold(h) {
-  const n = h && h.total >= 3 ? Math.ceil(h.left) : null;
-  if (n !== lastLeft) {
-    lastLeft = n;
-    for (const el of [$("cap-count"), $("head-count")]) { el.hidden = n === null; el.querySelector(".count-n").textContent = n === null ? "" : n; }
-    $("caption").classList.toggle("holding", n !== null);
-    $("caption").querySelector(".count-bar").hidden = n === null;
+const COUNT_LABEL = { hold: "Hold", rest: "Rest", set: "Rest", side: "Change sides" };
+/** the countdown for a hold (3 s or more) or a rest: whole seconds left, and a bar that shrinks */
+function showCount(c) {
+  const show = !!c && (c.kind !== "hold" || c.total >= 3);
+  const n = show ? Math.ceil(c.left) : null, key = show ? c.kind + n : null;
+  if (key !== lastCount) {
+    lastCount = key;
+    const resting = show && c.kind !== "hold";
+    for (const el of [$("cap-count"), $("head-count")]) {
+      el.hidden = !show;
+      el.classList.toggle("rest", resting);
+      el.querySelector(".count-n").textContent = show ? n : "";
+      el.querySelector(".count-k").textContent = show ? COUNT_LABEL[c.kind] : "";
+    }
+    $("caption").classList.toggle("holding", show);
+    $("caption").classList.toggle("resting", resting);
+    $("caption").querySelector(".count-bar").hidden = !show;
+    for (const b of document.querySelectorAll('[data-act="skip-rest"]')) b.hidden = !resting;
   }
-  if (n !== null && !reduced) for (const bar of document.querySelectorAll(".count-bar i")) bar.style.transform = `scaleX(${(h.left / h.total).toFixed(4)})`;
+  if (show && !reduced) for (const bar of document.querySelectorAll(".count-bar i")) bar.style.transform = `scaleX(${(c.left / c.total).toFixed(4)})`;
+}
+/** the whole dose in words: "2 sets of 8", "3 holds each side", "5, 3 and 1 each side" */
+function doseSummary(s) {
+  const p = s.plan;
+  if (!p) return "";
+  const w = s.unit === "hold" ? "hold" : "rep";
+  const t = p.some((n) => n !== p[0]) ? `${p.slice(0, -1).join(", ")} and ${p.at(-1)}` : p.length > 1 ? `${p.length} sets of ${p[0]}` : count(p[0], w);
+  return t + (s.sides > 1 ? " each side" : "");
+}
+/** the session read-outs: rep and set (the tally), the countdown, and the caption during rests and at the end */
+function showSession(info) {
+  const s = info && info.session;
+  if (!s) { showCount(info && info.hold ? { ...info.hold, kind: "hold" } : null); }
+  else showCount(s.rest ? s.rest : info.hold ? { ...info.hold, kind: "hold" } : null);
+  let k = "", n = "", sub = "", cap = "";
+  if (s) {
+    const unit = s.unit === "hold" ? "Hold" : "Rep", next = s.reps ? `${unit.toLowerCase()} ${s.rep} of ${s.reps}` : `${unit.toLowerCase()} ${s.rep}`;
+    if (s.state === "waiting") { k = "Ready"; n = doseSummary(s) || "Count as you go"; sub = "Press Start"; }
+    else if (s.state === "done") { k = "Done"; n = doseSummary(s); cap = `Done: ${doseSummary(s)}. Press Start again for another round.`; }
+    else {
+      k = unit; n = s.reps ? `${s.rep} of ${s.reps}` : String(s.rep);
+      sub = [s.sets > 1 ? `Set ${s.set} of ${s.sets}` : "", s.sides > 1 ? (s.side === 1 ? "First side" : "Other side") : ""].filter(Boolean).join(" · ");
+      if (s.rest && s.rest.kind === "side") sub = [s.sets > 1 ? `Set ${s.set} of ${s.sets}` : "", "Other side: mirror the model"].filter(Boolean).join(" · ");
+      if (s.rest) cap = s.rest.kind === "side" ? "Change sides. Do the same on your other side, mirroring the model."
+        : s.rest.kind === "set" ? `Rest before set ${s.set} of ${s.sets}.` : `Rest, then ${next}. Let the stretch go.`;
+    }
+  }
+  const key = s ? [k, n, sub, s.state].join("|") : null;
+  if (key !== lastSess) {
+    lastSess = key;
+    for (const el of [$("tally"), $("head-tally")]) {
+      el.hidden = !s;
+      el.querySelector(".tally-k").textContent = k;
+      el.querySelector(".tally-n").textContent = n;
+      el.querySelector(".tally-s").textContent = sub;
+    }
+    updatePlayBtn();
+  }
+  // during a rest and at the end the caption says so instead of showing a step
+  if (cap) {
+    if ($("cap-t").textContent !== cap) { $("cap-n").textContent = ""; $("cap-t").textContent = cap; }
+    capOverride = true;
+  } else if (capOverride) {
+    capOverride = false;
+    lastStep = -1;   // the next update writes the step back
+  }
 }
 
 function setPressed(container, attr, value) {
@@ -410,7 +467,7 @@ function setScene(next) {
   anatomy.invalidate();
   figure.controls.enabled = scene === "figure";
   if (scene === "anatomy") $("phase").textContent = "";
-  if (scene !== "figure") showHold(null);
+  if (scene !== "figure") showSession(null);
   $("btn-real-head").parentElement.hidden = scene !== "figure";   // the phone's copy of the toggle sits outside the tools
 }
 
@@ -423,7 +480,26 @@ function measureInsets() {
   anatomy.setInsets(Math.round(title.bottom - st.top + 6), Math.round(st.bottom - tools.top + 6));
 }
 
+// ---------- where it hurts: light the area ----------
+// Pointing at, focusing or pressing a "Where it hurts" chip lights that part of the body on the atlas. Touch has no
+// hover, but a finger on the chip raises pointerover until it lifts (or scrolls away), so the same events cover it.
+let glowHover = null, glowFocus = null;
+function glowSync() {
+  const id = glowHover || glowFocus;
+  if (anatomy) anatomy.glowArea(id && scene === "anatomy" ? Pt[id].area : null, reduced);
+}
+function glowOff() { glowHover = glowFocus = null; glowSync(); }
+const whereChip = (el) => {
+  const b = el instanceof Element ? el.closest('.chip[data-go="pattern"]') : null;
+  return b && Pt[b.dataset.id] && Pt[b.dataset.id].kind === "where" && Pt[b.dataset.id].area ? b : null;
+};
+panel.addEventListener("pointerover", (ev) => { const b = whereChip(ev.target); if (b) { glowHover = b.dataset.id; glowSync(); } });
+panel.addEventListener("pointerout", (ev) => { const b = whereChip(ev.target); if (b && !b.contains(ev.relatedTarget)) { glowHover = null; glowSync(); } });
+panel.addEventListener("focusin", (ev) => { const b = whereChip(ev.target); glowFocus = b && b.matches(":focus-visible") ? b.dataset.id : null; glowSync(); });
+panel.addEventListener("focusout", (ev) => { if (whereChip(ev.target)) { glowFocus = null; glowSync(); } });
+
 function render() {
+  glowOff();   // the chips are about to go
   panel.innerHTML = viewFor(cur());
   panel.scrollTop = 0;
   syncStage();
@@ -434,6 +510,7 @@ function syncStage() {
   $("tip").classList.remove("on");
   $("stage-title").textContent = spec.title;
   if (!anatomy) { $("stage-sub").textContent = ""; return; }   // no 3D: the panel carries on alone
+  if (figure && !(s.view === "exercise" && MOVES[s.id])) figure.loaded = null;   // leaving an exercise ends its session
   const missing = spec.need.filter((r) => !loaded.has(r));
   if (missing.length) {
     // keep the last picture up with a note over it; draw the new view once the muscles arrive
@@ -454,7 +531,7 @@ function syncStage() {
     if (figure.loaded !== key) {
       figure.load(s.id, spec.fig);
       figure.loaded = key;
-      figure.setPlaying(!reduced);
+      figure.setPlaying(!reduced && !realTime);   // a real-time session waits for Start
       syncViewButtons();
     }
     lastStep = -1; lastLabel = null;
@@ -494,8 +571,11 @@ function syncViewButtons() {
 function updatePlayBtn() {
   const b = $("btn-play");
   const on = figure && figure.isPlaying();
-  b.innerHTML = (on ? ICON.pause : ICON.play) + (on ? "Pause" : "Play");
-  b.setAttribute("aria-label", on ? "Pause" : "Play");
+  const st = realTime && figure && figure.sessionState();
+  const label = st === "waiting" ? "Start" : st === "done" ? "Start again" : on ? "Pause" : "Play";
+  b.innerHTML = (on ? ICON.pause : ICON.play) + label;
+  b.setAttribute("aria-label", label);
+  b.classList.toggle("solid", st === "waiting" || st === "done");
 }
 
 function updateSteps(info) {
@@ -509,7 +589,7 @@ function updateSteps(info) {
     $("cap-t").textContent = e.steps[info.step];
   }
   if (info.label !== lastLabel) { lastLabel = info.label; $("phase").textContent = info.label; }
-  showHold(info.hold);
+  showSession(info);
 }
 
 // ---------- search ----------
@@ -629,8 +709,11 @@ document.addEventListener("click", (ev) => {
   if (d.act === "real" && figure) {
     realTime = !realTime;
     try { localStorage.setItem(REAL_KEY, realTime ? "1" : "0"); } catch (e) { /* not remembered */ }
-    return applyRealTime();
+    applyRealTime();
+    if (!realTime && cur().view === "exercise") figure.setPlaying(!reduced);   // back to the ordinary loop
+    return updatePlayBtn();
   }
+  if (d.act === "skip-rest" && figure) { figure.skipRest(); return; }
   if (d.speed && figure) { figure.setSpeed(Number(d.speed)); return setPressed($("tools-figure"), "speed", d.speed); }
   if ((d.fframe || d.fangle) && figure) { figure.setView(d.fframe, d.fangle); return syncViewButtons(); }
   if (d.view && anatomy) { anatomy.setView(d.view); return setPressed($("tools-anatomy"), "view", d.view); }
@@ -638,7 +721,7 @@ document.addEventListener("click", (ev) => {
 });
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "/" && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !typing(ev.target)) { ev.preventDefault(); sInput.focus(); sInput.select(); return; }
-  if (ev.key === "Escape" && nav().length > 1) back();
+  if (ev.key === "Escape") { glowOff(); if (nav().length > 1) back(); }
 });
 
 let down = null;

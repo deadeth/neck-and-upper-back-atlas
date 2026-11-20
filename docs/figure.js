@@ -304,6 +304,7 @@ export function createFigure(canvas, model, buffer, meta) {
   // ---------- player ----------
   let move = null, poses = [], time = 0, playing = true, speed = 1, autoView = null, glowT = 0, ground = 0;
   let real = false, rt = 0, plan = null;   // real-time playback: seconds into the real loop, and its phase timings
+  let session = null, moveId = null;   // real-time session: the reps, rests and changeovers of the dose (see sessionFor)
   const view = { frame: "whole", angle: "best" };
   const targetMats = [];
 
@@ -350,6 +351,9 @@ export function createFigure(canvas, model, buffer, meta) {
     time = 0;
     plan = planFor(id);
     rt = 0;
+    session = sessionFor(id);
+    moveId = id;
+    if (real) playing = false;   // a session waits for Start
     dyn.length = 0;
     for (const c of [...props.children]) props.remove(c);
     for (const p of move.props) BUILD[p]();
@@ -661,6 +665,65 @@ export function createFigure(canvas, model, buffer, meta) {
     }
     return { at, len, start, total, hold: r.hold ? hold : -1 };
   }
+  // A session is a list of items: a rep (one real loop of the move) or a rest (the start pose, waiting).
+  // `i` is the current item and `t` the seconds into a rest; `rt` is the seconds into a rep's loop.
+  // state: "waiting" (before Start), "run", "done" (stopped on the start pose).
+  function sessionFor(id) {
+    const r = REAL[id] || {}, sides = r.eachSide ? 2 : 1;
+    const sets = Array.isArray(r.reps) ? r.reps : r.reps ? Array(r.sets || 1).fill(r.reps) : null;
+    let items = null;
+    if (sets) {
+      items = [];
+      sets.forEach((n, s) => {
+        for (let side = 1; side <= sides; side++) {
+          for (let k = 1; k <= n; k++) {
+            items.push({ rep: k, reps: n, set: s + 1, side });
+            if (k < n && r.rest) items.push({ kind: "rest", len: r.rest });
+          }
+          if (side < sides && r.sideRest) items.push({ kind: "side", len: r.sideRest });
+        }
+        if (s < sets.length - 1 && r.setRest) items.push({ kind: "set", len: r.setRest });
+      });
+      // a rest shows the rep that comes after it
+      for (let k = items.length - 1, next = null; k >= 0; k--) if (items[k].kind) items[k].next = next; else next = items[k];
+    }
+    return { items, sets: sets ? sets.length : 1, reps: sets, sides, unit: r.unit || "rep", i: 0, t: 0, count: 0, state: "waiting" };
+  }
+  function restartSession() { Object.assign(session, { i: 0, t: 0, count: 0, state: "run" }); rt = 0; }
+  function nextItem() {
+    const S = session;
+    S.t = 0; rt = 0;
+    if (!S.items) return;
+    if (S.i + 1 >= S.items.length) { S.state = "done"; playing = false; return; }
+    S.i++;
+  }
+  /** move the session on by dt seconds, carrying any remainder into the next item */
+  function stepSession(dt) {
+    const S = session;
+    while (dt > 0 && S.state === "run") {
+      const it = S.items && S.items[S.i];
+      if (it && it.kind) {
+        const left = it.len - S.t;
+        if (dt < left) { S.t += dt; return; }
+        dt -= left; nextItem();
+      } else {
+        const left = plan.total - rt;
+        if (dt < left) { rt += dt; return; }
+        dt -= left; S.count++; nextItem();
+      }
+    }
+  }
+  function sessionInfo() {
+    const S = session, it = S.items ? S.items[S.i] : null;
+    const resting = S.state === "run" && it && it.kind;
+    const cur = it ? (it.kind ? it.next : it) : { rep: S.count + 1, reps: null, set: 1, side: 1 };
+    return {
+      state: S.state === "run" ? (resting ? "rest" : "rep") : S.state,
+      rep: cur.rep, reps: cur.reps, set: cur.set, sets: S.sets, side: cur.side, sides: S.sides, unit: S.unit,
+      plan: S.reps, done: S.count,
+      rest: resting ? { kind: it.kind, left: it.len - S.t, total: it.len } : null,
+    };
+  }
   /** real seconds into the loop -> loop fraction */
   function realToF(s) {
     const { at, len, start } = plan;
@@ -685,7 +748,11 @@ export function createFigure(canvas, model, buffer, meta) {
     update(dt) {
       controls.update();
       if (!move) return null;
-      if (playing && real) { rt = (rt + dt) % plan.total; time = realToF(rt) * move.dur; }
+      if (real) {
+        if (playing) stepSession(dt);
+        const still = session.state === "done" || (session.state === "run" && session.items && session.items[session.i].kind);
+        time = still ? 0 : realToF(rt) * move.dur;   // rests and the end stay on the start pose
+      }
       else if (playing) time = (time + dt * speed) % move.dur;
       const f = time / move.dur;
       pose(f);
@@ -694,23 +761,36 @@ export function createFigure(canvas, model, buffer, meta) {
       const glow = ph.w ? 0.3 + 0.22 * Math.sin(glowT * 3.2) : 0.1;
       for (const mat of targetMats) mat.emissive.copy(mat.color).multiplyScalar(glow);
       let hold = null;
-      if (real && plan.hold >= 0) {
+      const info = real ? sessionInfo() : null;
+      if (real && plan.hold >= 0 && info.state === "rep") {
         const i = plan.hold, left = plan.start[i] + plan.len[i] - rt;
         if (rt >= plan.start[i] && left > 0) hold = { left, total: plan.len[i] };
       }
-      return { step: ph.step, label: ph.label || "", working: !!ph.w, f, hold };
+      return { step: ph.step, label: ph.label || "", working: !!ph.w, f, hold, session: info };
     },
     seek(f) { if (move) { time = f * move.dur; rt = fToReal(f); } },
     /** play at the pace you would do the exercise: holds last their stated time, Speed is ignored */
+    // Turning it on goes back to the start pose and waits for Start; turning it off carries on the ordinary
+    // loop from the pose on screen.
     setRealTime(on) {
       on = !!on;
-      if (on && !real && move) rt = fToReal(time / move.dur);   // carry on from the same pose
+      if (on && !real && move) { rt = 0; time = 0; session = sessionFor(moveId); playing = false; }
       real = on;
     },
+    /** end a rest or changeover now */
+    skipRest() { if (real && session && session.state === "run" && session.items && session.items[session.i].kind) nextItem(); },
+    /** the session's items (for checks) */
+    sessionItems() { return session && session.items && session.items.map((x) => ({ ...x, next: undefined })); },
     isRealTime() { return real; },
+    /** "waiting", "run" or "done" while Real time is on, otherwise null */
+    sessionState() { return real && session ? session.state : null; },
     /** the real-time loop: phase lengths and total in seconds (for checks) */
     realPlan() { return plan && { len: [...plan.len], start: [...plan.start], total: plan.total, hold: plan.hold }; },
-    setPlaying(p) { playing = p; },
+    /** in real time, playing from waiting or done starts the session from the top */
+    setPlaying(p) {
+      if (p && real && session && session.state !== "run") restartSession();
+      playing = p;
+    },
     isPlaying() { return playing; },
     setSpeed(s) { speed = s; },
     setView,

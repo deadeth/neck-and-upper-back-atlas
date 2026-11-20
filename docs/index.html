@@ -108,6 +108,22 @@ ul, ol { list-style: none; }
 .head-r { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .head-count { display: none; position: relative; overflow: hidden; align-items: baseline; gap: 2px; padding: 4px 12px 8px; border-radius: var(--r); border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(6px); color: var(--accent); font-variant-numeric: tabular-nums; }
 .head-count .count-n { font-size: 40px; }
+/* real-time session: the tally (rep, set, side), rests in the heat colour so nobody holds through them, Skip rest */
+.count-k { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; align-self: center; margin-right: 6px; }
+.count.rest, .head-count.rest { color: var(--heat); }
+.caption.resting .count-bar, .head-count.rest .count-bar { background: var(--heat-soft); }
+.caption.resting .count-bar i, .head-count.rest .count-bar i { background: var(--heat); }
+.tally { display: flex; flex-direction: column; justify-content: center; margin-right: 8px; padding: 6px 14px; border-radius: var(--r); border: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(6px); white-space: nowrap; }
+.tally-k { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.tally-n { font-size: 26px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tally-s { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tally-s:empty { display: none; }
+.skip { flex: none; align-self: center; margin-left: 10px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--heat); color: var(--heat); background: var(--panel); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.skip:hover { background: var(--heat-soft); }
+.head-r .tally { display: none; margin-right: 0; padding: 4px 11px 5px; flex-flow: row wrap; justify-content: flex-end; align-items: baseline; column-gap: 7px; max-width: 230px; }
+.head-r .tally-s { flex-basis: 100%; text-align: right; white-space: normal; }
+.head-r .tally-n { font-size: 21px; }
+.head-r .skip { display: none; margin-left: 0; pointer-events: auto; }
 .rt-head { display: none; pointer-events: auto; }
 .stage-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 .stage-msg:empty { display: none; }
@@ -244,6 +260,8 @@ button.eyebrow:hover { color: var(--accent); }
   .search-key { display: none; }
   .search-pop { min-width: 0; }
   .head-count { display: inline-flex; }
+  .head-r .tally { display: flex; }
+  .head-r .skip { display: inline-block; }
   .rt-tools { display: none; }   /* a third row of tools would cover the feet: on a phone the toggle sits top right */
   .rt-head { display: inline-flex; }
 }
@@ -286,7 +304,9 @@ button.eyebrow:hover { color: var(--accent); }
         <div class="head-r">
           <div class="seg rt-head" hidden><button class="rt" data-act="real" id="btn-real-head" aria-pressed="false"><svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 5.2V8l1.8 1.3M5.4 1.4h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Real time</button></div>
           <div class="phase" id="phase"></div>
-          <div class="head-count" id="head-count" role="timer" aria-label="Hold time left" hidden><span class="count-n"></span><span class="count-u">s</span><span class="count-bar"><i></i></span></div>
+          <div class="tally" id="head-tally" aria-live="polite" hidden><span class="tally-k"></span><span class="tally-n"></span><span class="tally-s"></span></div>
+          <div class="head-count" id="head-count" role="timer" aria-label="Time left" hidden><span class="count-k"></span><span class="count-n"></span><span class="count-u">s</span><span class="count-bar"><i></i></span></div>
+          <button class="skip" data-act="skip-rest" hidden>Skip rest</button>
         </div>
       </div>
       <div class="tip" id="tip"></div>
@@ -307,7 +327,7 @@ button.eyebrow:hover { color: var(--accent); }
         <div class="seg" id="clear-wrap" hidden><button data-act="clear">Show all muscles</button></div>
       </div>
       <div class="tools" id="tools-figure" hidden>
-        <div class="caption-row"><div class="caption" id="caption"><b id="cap-n"></b><span id="cap-t"></span><span class="count" id="cap-count" role="timer" aria-label="Hold time left" hidden><span class="count-n"></span><span class="count-u">s</span></span><span class="count-bar" hidden><i></i></span></div></div>
+        <div class="caption-row"><div class="tally" id="tally" aria-live="polite" hidden><span class="tally-k"></span><span class="tally-n"></span><span class="tally-s"></span></div><div class="caption" id="caption"><b id="cap-n"></b><span id="cap-t"></span><span class="count" id="cap-count" role="timer" aria-label="Time left" hidden><span class="count-k"></span><span class="count-n"></span><span class="count-u">s</span></span><button class="skip" data-act="skip-rest" hidden>Skip rest</button><span class="count-bar" hidden><i></i></span></div></div>
         <div class="seg">
           <button class="icon" data-act="play" id="btn-play" aria-label="Pause"></button>
         </div>

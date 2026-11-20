@@ -17,7 +17,8 @@ Every exercise and lift plays on a full skeleton, with the worked muscles highli
 - Neck and upper back, and lower back and core, also have 30 animated stretches and control exercises. Stretches for shoulders, hips and legs are still to come; until then those muscles list the lifts that train them.
 - Three strength days with 16 lifts, 13 of them new animations.
 - Search across muscles, exercises, lifts, pain patterns, regions and days, with everyday names and gym slang ("traps", "six pack", "rdl", "sciatica").
-- A Real time switch on the exercise player: holds last as long as the instruction says, with a countdown, so you can follow along.
+- A Real time switch on the exercise player turns it into a guided session: it waits for Start, holds last as long as the instruction says, reps and sets are counted from the written dose, and rests are timed between sets, sides and long holds.
+- Hovering a "Where it hurts" button (or holding a finger on it) makes that area of the body glow on the model.
 
 This is a guide to muscular sources of pain. It isn't medical advice and it can't examine you. Joints, discs and nerves cause pain too, and each finished region lists the symptoms that mean seeing a GP or physio first, or calling 999.
 

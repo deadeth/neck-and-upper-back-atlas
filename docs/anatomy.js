@@ -20,6 +20,35 @@ const VIEW_DIR = {
 };
 const HOME_TARGET = new THREE.Vector3(0, -1.5, 1.5);
 const HOME_RADIUS = 36;
+const GLOW = 0xff7a1a;      // the "where it hurts" glow
+const MAX_SPOTS = 48;
+const GLOW_FADE = 0.15;     // seconds to fade in or out
+
+/**
+ * Resolve a pattern's `area` (see content-body.js) to spots [x, y, z, r] in model space. Every spot is drawn on
+ * both sides of the body, with x in `off` pointing outwards; one that lands on the midline is drawn once.
+ * A paired landmark is named without its side ("hum" is humL on the left copy, humR on the right).
+ * @param rig  model.rig
+ */
+export function areaSpots(area, rig) {
+  const land = (name, s) => (name === "acrom" ? rig["acrom" + s] : rig.joints[name] || rig.joints[name + s]);
+  const out = [];
+  for (const sp of area) for (const s of ["L", "R"]) {
+    const a = land(sp.at, s), b = sp.to ? land(sp.to, s) : a;
+    const [f0, f1] = Array.isArray(sp.f) ? sp.f : [sp.f || 0, sp.f || 0];
+    const off = sp.off || [0, 0, 0], sx = s === "L" ? 1 : -1;
+    // a range is a chain of spots 0.8 of a radius apart, close enough to merge into one even band
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) * Math.abs(f1 - f0);
+    const n = f0 === f1 ? 1 : Math.max(2, Math.ceil(len / (sp.r * 0.8)) + 1);
+    for (let k = 0; k < n; k++) {
+      const t = n === 1 ? f0 : f0 + ((f1 - f0) * k) / (n - 1);
+      const p = [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * t + (i === 0 ? off[0] * sx : off[i]));
+      if (s === "R" && Math.abs(p[0]) < 0.5) continue;   // on the midline: once is enough
+      out.push([...p, sp.r]);
+    }
+  }
+  return out;
+}
 
 /**
  * @param canvas    the shared canvas
@@ -48,7 +77,80 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
   controls.rotateSpeed = 0.9;
   controls.zoomToCursor = true;
 
-  const boneMat = new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.78, metalness: 0, side: THREE.DoubleSide });
+  // ---- glow ----
+  // Bone and muscle materials share one set of uniforms: up to MAX_SPOTS spheres, and how bright they are now.
+  // A surface inside a sphere is tinted and lit towards the glow colour, fading out to its edge. With no spots
+  // the shader loop ends at once, so idle frames cost nothing extra and no material ever recompiles.
+  const glowU = {
+    uGlowSpot: { value: Array.from({ length: MAX_SPOTS }, () => new THREE.Vector4()) },
+    uGlowN: { value: 0 }, uGlow: { value: 0 }, uGlowCol: { value: new THREE.Color(GLOW) },
+  };
+  function glowable(mat) {
+    mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, glowU);
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vGlowPos;")
+        .replace("#include <project_vertex>", "#include <project_vertex>\nvGlowPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", `#include <common>
+uniform vec4 uGlowSpot[${MAX_SPOTS}];
+uniform int uGlowN;
+uniform float uGlow;
+uniform vec3 uGlowCol;
+varying vec3 vGlowPos;`)
+        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+float glowA = 0.0;
+for (int i = 0; i < ${MAX_SPOTS}; i++) {
+  if (i >= uGlowN) break;
+  glowA = max(glowA, 1.0 - smoothstep(uGlowSpot[i].w * 0.4, uGlowSpot[i].w, distance(vGlowPos, uGlowSpot[i].xyz)));
+}
+glowA *= uGlow;
+diffuseColor.rgb = mix(diffuseColor.rgb, uGlowCol, glowA * 0.55);
+totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
+    };
+    mat.customProgramCacheKey = () => "glow";
+    return mat;
+  }
+  // a faint soft halo per spot, drawn over everything, so an area on the far side still shows
+  const haloTex = (() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d"), grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(0.45, "rgba(255,255,255,0.45)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const haloMat = new THREE.SpriteMaterial({ map: haloTex, color: GLOW, transparent: true, depthTest: false, depthWrite: false, opacity: 0 });
+  const halos = Array.from({ length: MAX_SPOTS }, () => {
+    const s = new THREE.Sprite(haloMat);
+    s.visible = false; s.renderOrder = 10;
+    scene.add(s);
+    return s;
+  });
+  const glow = { on: false, fade: 0, t: 0, steady: false, freeze: null, key: null };
+  function setSpots(spots) {
+    spots = spots.slice(0, MAX_SPOTS);
+    glowU.uGlowN.value = spots.length;
+    halos.forEach((h, i) => {
+      h.visible = i < spots.length;
+      if (h.visible) { h.position.fromArray(spots[i]); h.scale.setScalar(spots[i][3] * 1.5); glowU.uGlowSpot.value[i].fromArray(spots[i]); }
+    });
+  }
+  /** fade and pulse; returns true while the glow needs frames */
+  function glowTick(dt) {
+    if (!glow.on && glow.fade === 0) return false;
+    glow.fade = THREE.MathUtils.clamp(glow.fade + (glow.on ? dt : -dt) / GLOW_FADE, 0, 1);
+    glow.t = (glow.t + dt) % 1;
+    // one slow swell a second between 65% and full, never off; steady at full for reduced motion
+    const phase = glow.freeze === null ? glow.t : glow.freeze;
+    const level = glow.fade * (glow.steady ? 1 : 0.65 + 0.35 * (0.5 - 0.5 * Math.cos(2 * Math.PI * phase)));
+    glowU.uGlow.value = level;
+    haloMat.opacity = 0.38 * level;
+    if (glow.fade === 0) { setSpots([]); glow.key = null; }
+    return true;
+  }
+
+  const boneMat = glowable(new THREE.MeshStandardMaterial({ color: BONE, roughness: 0.78, metalness: 0, side: THREE.DoubleSide }));
   const muscles = [];   // meshes
   const bones = [];
   const byId = new Map();   // muscleId -> [meshes]
@@ -65,7 +167,7 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
       // small lightness shift per muscle so neighbours of the same layer separate
       if (part.side === "L") n++;
       base.offsetHSL(0, 0, ((n * 7) % 5 - 2) * 0.012);
-      const mat = new THREE.MeshStandardMaterial({ color: base, roughness: 0.56, metalness: 0, side: THREE.DoubleSide });
+      const mat = glowable(new THREE.MeshStandardMaterial({ color: base, roughness: 0.56, metalness: 0, side: THREE.DoubleSide }));
       mesh = new THREE.Mesh(geo, mat);
       mesh.userData.base = base;
       mesh.userData.layer = layer;
@@ -258,6 +360,7 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
         dirty = true;
       }
       if (controls.update()) dirty = true;
+      if (glowTick(dt)) dirty = true;
       const d = dirty;
       dirty = false;
       if (d) updateRuler();
@@ -267,6 +370,18 @@ export function createAnatomy(canvas, model, buffer, meta, rulerEl) {
     cancelTween() { tween = null; },
     pick,
     hover(id) { if (id !== hoverId) { hoverId = id; apply(); } },
+    /** light a pattern's `area` (null fades it out); steady = no pulse. The camera stays where it is. */
+    glowArea(area, steady = false) {
+      const key = area ? JSON.stringify(area) : null;
+      glow.steady = steady;
+      if (!area) { if (glow.on) { glow.on = false; dirty = true; } return; }
+      if (key !== glow.key) { setSpots(areaSpots(area, model.rig)); glow.key = key; }
+      if (!glow.on && glow.fade === 0) glow.t = 0.5;   // start bright
+      glow.on = true;
+      dirty = true;
+    },
+    /** for tests: pin the pulse at a phase (0.5 is the brightest), or null to let it run; reads the state */
+    glowTest(phase) { if (phase !== undefined) glow.freeze = phase; return { on: glow.on, fade: glow.fade, level: glowU.uGlow.value, spots: glowU.uGlowN.value }; },
     /** select muscles; ranked=true colours them by position in the list; isWide keeps the camera on the whole area */
     select(ids, isRanked = false, view, isWide = false) {
       selected = ids.filter((id) => byId.has(id));

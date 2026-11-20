@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "../docs/content.js";
 import { MOVES, BASES } from "../docs/moves.js";
 import { REAL } from "../docs/timing.js";
+import { areaSpots } from "../docs/anatomy.js";
 
 const read = (f) => JSON.parse(fs.readFileSync(new URL(`../docs/${f}`, import.meta.url)));
 const errs = [];
@@ -75,6 +76,26 @@ for (const p of PATTERNS) {
   ok(p.kind === "where" || p.kind === "when", `${p.id}: bad kind`);
   ok(p.muscles.length >= 3, `${p.id}: fewer than 3 muscles`);
   for (const x of p.muscles) ok(muscleIds.has(x.id), `${p.id}: unknown muscle ${x.id}`);
+  // the area lit on the model while a "where" chip is hovered (contract, Addendum 3)
+  if (p.kind !== "where") { ok(p.area === undefined, `${p.id}: only "where" patterns have an area`); continue; }
+  if (!Array.isArray(p.area) || !p.area.length) { errs.push(`${p.id}: "where" pattern needs an area with at least one spot`); continue; }
+  const known = (n) => typeof n === "string" && (n === "acrom" || (n in model.rig.joints && !/[LR]$/.test(n)) || (n + "L" in model.rig.joints && n + "R" in model.rig.joints));
+  const before = errs.length;
+  for (const sp of p.area) {
+    const extra = Object.keys(sp).filter((k) => !["at", "to", "f", "off", "r"].includes(k));
+    ok(!extra.length, `${p.id}: area spot has unknown keys ${extra.join(", ")}`);
+    ok(known(sp.at), `${p.id}: area landmark "${sp.at}" is not in the rig`);
+    ok(sp.to === undefined || known(sp.to), `${p.id}: area landmark "${sp.to}" is not in the rig`);
+    const fs = sp.f === undefined ? [] : Array.isArray(sp.f) ? sp.f : [sp.f];
+    ok(fs.length <= 2 && fs.every((v) => typeof v === "number" && v >= 0 && v <= 1), `${p.id}: area f must be 0..1 or a pair of them`);
+    ok(sp.f === undefined || sp.to !== undefined, `${p.id}: area f needs a "to" landmark`);
+    ok(sp.off === undefined || (Array.isArray(sp.off) && sp.off.length === 3 && sp.off.every((v) => typeof v === "number" && Math.abs(v) <= 20)), `${p.id}: area off must be [x, y, z] within 20 cm`);
+    ok(typeof sp.r === "number" && sp.r >= 2 && sp.r <= 10, `${p.id}: area radius ${sp.r} outside 2..10 cm`);
+  }
+  if (errs.length === before) {
+    const n = areaSpots(p.area, model.rig).length;
+    ok(n >= 1 && n <= 48, `${p.id}: area makes ${n} spots, at most 48`);
+  }
 }
 
 // ---- strength days and lifts ----
@@ -127,6 +148,23 @@ for (const id of Object.keys(MOVES)) ok(EXERCISE_INFO[id], `animation ${id} has 
 // real-time playback: every animation has timings, and every timing belongs to an exercise
 for (const id of Object.keys(MOVES)) ok(REAL[id], `animation ${id} has no real-time entry in site/timing.js`);
 for (const id of Object.keys(REAL)) ok(EXERCISE_INFO[id] && MOVES[id], `site/timing.js: ${id} is not an animated exercise`);
+// ...and each entry is well formed (shape in the header of site/timing.js)
+const posNum = (v) => typeof v === "number" && v > 0 && isFinite(v);
+const posInt = (v) => Number.isInteger(v) && v > 0;
+for (const [id, r] of Object.entries(REAL)) {
+  const where = `site/timing.js ${id}`, mv = MOVES[id];
+  for (const k of Object.keys(r)) ok(["hold", "tempo", "reps", "sets", "eachSide", "unit", "rest", "setRest", "sideRest"].includes(k), `${where}: unknown field ${k}`);
+  if ("hold" in r) ok(posNum(r.hold) && mv && mv.phases.some((p) => p.w), `${where}: hold must be seconds on a move with a working phase`);
+  for (const [k, v] of Object.entries(r.tempo || {})) ok(mv && posInt(+k + 1) && +k < mv.phases.length && posNum(v), `${where}: tempo ${k} must be a phase index with seconds`);
+  const many = Array.isArray(r.reps);
+  if ("reps" in r) ok(many ? r.reps.length > 1 && r.reps.every(posInt) : posInt(r.reps), `${where}: reps must be a whole number or a list of them`);
+  if ("sets" in r) ok(posInt(r.sets) && "reps" in r && !many, `${where}: sets needs reps as a number`);
+  if ("eachSide" in r) ok(r.eachSide === true && posNum(r.sideRest), `${where}: eachSide must be true and have a sideRest`);
+  if ("sideRest" in r) ok(r.eachSide === true && posNum(r.sideRest), `${where}: sideRest belongs with eachSide`);
+  if ("unit" in r) ok(r.unit === "hold" && r.hold, `${where}: unit can only be "hold", on an entry with a hold`);
+  if ("rest" in r) ok(posNum(r.rest) && (many || r.reps > 1), `${where}: rest needs more than one rep in a set`);
+  if ("setRest" in r) ok(posNum(r.setRest) && (many || r.sets > 1), `${where}: setRest needs more than one set`);
+}
 
 // ---- search aliases (optional on every entry) ----
 const aliased = [

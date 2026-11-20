@@ -240,32 +240,32 @@ export const MUSCLES = [
 
 // Each pattern lists muscles from most to least likely, with the reason.
 export const PATTERNS = [
-  { id: "skull-base", kind: "where", name: "Base of the skull", note: "Often comes with a headache that spreads forward.", aliases: ["tension headache", "headache", "back of the head"], muscles: [
+  { id: "skull-base", kind: "where", name: "Base of the skull", note: "Often comes with a headache that spreads forward.", area: [{ at: "head", off: [0, 1, -6.5], r: 4.5 }, { at: "head", off: [4, 0.5, -5], r: 4 }], aliases: ["tension headache", "headache", "back of the head"], muscles: [
     { id: "suboccipitals", why: "Deep ache under the skull edge, spreading to the eye" },
     { id: "semispinalis-capitis", why: "Band of pain from the back of the skull to the temple" },
     { id: "upper-trapezius", why: "Refers up the neck to behind the ear" },
     { id: "splenius-capitis", why: "Refers to the top of the head" },
   ] },
-  { id: "back-of-neck", kind: "where", name: "Back of the neck", note: "Central or just either side of the spine.", aliases: ["neck pain", "sore neck", "stiff neck"], muscles: [
+  { id: "back-of-neck", kind: "where", name: "Back of the neck", note: "Central or just either side of the spine.", area: [{ at: "c2", to: "c7", f: [0, 1], off: [0, 0, -6], r: 4.5 }], aliases: ["neck pain", "sore neck", "stiff neck"], muscles: [
     { id: "semispinalis-cervicis", why: "Deep central ache, worse after looking down" },
     { id: "semispinalis-capitis", why: "Thick column just off the midline" },
     { id: "splenius-capitis", why: "Back and side of the upper neck" },
     { id: "deep-neck-flexors", why: "Weak support at the front loads the back" },
   ] },
-  { id: "side-of-neck", kind: "where", name: "Side of the neck", note: "From below the ear to the shoulder.", aliases: ["stiff neck", "crick in the neck", "neck pain", "wry neck"], muscles: [
+  { id: "side-of-neck", kind: "where", name: "Side of the neck", note: "From below the ear to the shoulder.", area: [{ at: "head", to: "c7", f: [0.1, 1], off: [5.5, 0, 0], r: 4 }], aliases: ["stiff neck", "crick in the neck", "neck pain", "wry neck"], muscles: [
     { id: "levator-scapulae", why: "Angle of the neck, with a stiff turn" },
     { id: "upper-trapezius", why: "Ache up the side from the shoulder" },
     { id: "scalenes", why: "Low at the side and front" },
     { id: "splenius-cervicis", why: "Deep at the side, with limited turning" },
     { id: "sternocleidomastoid", why: "Tender strap at the front and side" },
   ] },
-  { id: "top-of-shoulder", kind: "where", name: "Top of the shoulder", note: "Between the neck and the tip of the shoulder.", aliases: ["tight shoulders", "shoulder knots", "shoulder tension"], muscles: [
+  { id: "top-of-shoulder", kind: "where", name: "Top of the shoulder", note: "Between the neck and the tip of the shoulder.", area: [{ at: "c7", to: "acrom", f: [0.35, 0.92], off: [0, 1.5, -2.5], r: 5 }], aliases: ["tight shoulders", "shoulder knots", "shoulder tension"], muscles: [
     { id: "upper-trapezius", why: "The roll of muscle you can pinch" },
     { id: "levator-scapulae", why: "Knot at the top corner of the shoulder blade" },
     { id: "supraspinatus", why: "Deeper, with pain lifting the arm" },
     { id: "scalenes", why: "Can refer to the shoulder" },
   ] },
-  { id: "between-blades", kind: "where", name: "Between the shoulder blades", note: "Beside the spine or along the inner edge of the blade.", aliases: ["upper back pain", "shoulder blade pain", "knot in the back"], muscles: [
+  { id: "between-blades", kind: "where", name: "Between the shoulder blades", note: "Beside the spine or along the inner edge of the blade.", area: [{ at: "c7", to: "thorax", f: [0.12, 0.55], off: [3.5, 0, -8], r: 5 }], aliases: ["upper back pain", "shoulder blade pain", "knot in the back"], muscles: [
     { id: "rhomboid-major", why: "Nagging ache at the inner edge of the blade" },
     { id: "rhomboid-minor", why: "Higher on the inner edge" },
     { id: "middle-trapezius", why: "Burning nearer the spine" },
@@ -273,7 +273,7 @@ export const PATTERNS = [
     { id: "lower-trapezius", why: "Dull mid-back ache, often from weakness" },
     { id: "scalenes", why: "Refers here from the front of the neck" },
   ] },
-  { id: "front-and-face", kind: "where", name: "Front of the neck, face or eye", note: "Pain round the eye, forehead, cheek or ear with a sore neck.", aliases: ["face pain", "eye pain", "forehead", "ear pain", "headache"], muscles: [
+  { id: "front-and-face", kind: "where", name: "Front of the neck, face or eye", note: "Pain round the eye, forehead, cheek or ear with a sore neck.", area: [{ at: "c2", to: "c7", f: [0, 1], off: [3, 0, 5], r: 4 }, { at: "head", off: [3.3, 6.5, 10], r: 3.5 }, { at: "head", off: [0, 9.5, 10.5], r: 3.5 }, { at: "head", off: [5, 3, 7.5], r: 3.5 }, { at: "head", off: [7, 3, -1], r: 3 }], aliases: ["face pain", "eye pain", "forehead", "ear pain", "headache"], muscles: [
     { id: "sternocleidomastoid", why: "Refers to forehead, eye, cheek and ear" },
     { id: "suboccipitals", why: "Band from the skull base to the eye" },
     { id: "scalenes", why: "Front and side of the lower neck" },
