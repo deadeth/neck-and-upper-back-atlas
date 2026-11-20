@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { REGIONS, STRENGTH, GROUPS, MUSCLES, PATTERNS, EXERCISE_INFO, RED_FLAGS } from "../docs/content.js";
 import { MOVES, BASES } from "../docs/moves.js";
 import { REAL } from "../docs/timing.js";
-import { areaSpots } from "../docs/anatomy.js";
+import { areaSpots } from "../docs/areas.js";
 
 const read = (f) => JSON.parse(fs.readFileSync(new URL(`../docs/${f}`, import.meta.url)));
 const errs = [];

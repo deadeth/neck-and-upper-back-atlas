@@ -34,6 +34,7 @@ The site is static and lives in `docs/`. There's no build step for the page.
 | `docs/figure.js` | The exercise skeleton: joints, arm and leg IK, skinned muscles, props |
 | `docs/moves.js`, `moves-core.js`, `moves-strength.js` | Keyframes for each exercise and lift |
 | `docs/content.js`, `content-body.js` | Regions, muscle notes, pain patterns, exercise instructions, strength days |
+| `docs/areas.js` | Turns a pain pattern's body area into glow spots |
 | `docs/search.js` | Search matching and ranking (pure functions) |
 | `docs/timing.js` | Real-time hold and tempo for each animation |
 | `docs/model.js` | Unpacks the model files into geometry |

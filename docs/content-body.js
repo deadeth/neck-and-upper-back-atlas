@@ -662,7 +662,7 @@ export const BODY_MUSCLES = [
 
 // Each pattern lists muscles from most to least likely, with the reason. These are muscles worth considering, not a diagnosis.
 // A "where" pattern also has `area`: the part of the body its name and note describe, lit on the model while its chip
-// is hovered (anatomy.js areaSpots). It is a list of soft spheres, { at, to?, f?, off?, r }, in model centimetres:
+// is hovered (areas.js areaSpots). It is a list of soft spheres, { at, to?, f?, off?, r }, in model centimetres:
 //   at, to  landmarks from model.json rig: head, c1..c7, thorax, l1..l5, pelvis, and the paired clav, scap, hum (shoulder
 //           joint), ulna (elbow), rad, hand (wrist), fem (hip joint), tib (knee), foot (ankle), toes, acrom (shoulder tip),
 //           named without their L/R side
