@@ -38,10 +38,11 @@ ORD = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eight
 CERV = ["atlas", "axis"] + [f"{o} cervical vertebra" for o in ORD[2:7]]
 THOR = [f"{o} thoracic vertebra" for o in ORD]
 LUMB = [f"{o} lumbar vertebra" for o in ORD[:5]]
-SKULL = ["occipital bone", "frontal bone", "sphenoid bone", "mandible", "hyoid bone",
+SKULL = ["occipital bone", "frontal bone", "sphenoid bone", "hyoid bone",
          "left parietal bone", "right parietal bone", "left temporal bone", "right temporal bone",
          "left maxilla", "right maxilla", "left zygomatic bone", "right zygomatic bone",
          "left nasal bone", "right nasal bone"]
+MANDIBLE = ["mandible"]   # the jaw bone is its own part, hinged at the jaw joints; the hyoid stays with the skull
 RIBS = [f"left {o} rib" for o in ORD] + [f"right {o} rib" for o in ORD]
 STERNUM = ["manubrium", "body of sternum", "xiphoid process"]
 
@@ -119,6 +120,44 @@ REGION_UNITS = {
         "tibialis-posterior": (r"tibialis posterior", ["tib{S}", "foot{S}"], 3),
         "fibulares": (r"fibularis (longus|brevis)", ["tib{S}", "foot{S}"], 1),
     },
+    "head": {
+        "masseter": (r"left (superficial|deep) part of masseter", ["head", "jaw"], 1),
+        "temporalis": (r"left temporalis", ["head", "jaw"], 1),
+        "medial-pterygoid": (r"left medial pterygoid", ["head", "jaw"], 3),
+        "lateral-pterygoid": (r"left (inferior|superior) head of lateral pterygoid", ["head", "jaw"], 4),
+        "digastric": (r"left digastric", ["head", "jaw"], 2),
+        "frontalis": (r"left frontalis", ["head", "brow"], 1),
+    },
+}
+# Units whose right side is named differently in the source: the left digastric is "left digastric" (front belly),
+# "(2)" (the intermediate tendon) and "(3)" (back belly); the right one is two bellies and "right intermediate tendon".
+RIGHT_NAMES = {"digastric": ["right digastric", "right digastric (2)", "right intermediate tendon"]}
+# Source meshes that are tendon, drawn as a tendon sheet (the part's `tendon` offset, as for the rectus sheath).
+TENDON_MESHES = ("left digastric (2)", "right intermediate tendon")
+# The frontalis has no bone below it: its lower edge (the eyebrows) follows `brow`, fading to the skull over this
+# height (mm) above the muscle's lowest point at each side-to-side position.
+BROW_FADE = (4.0, 36.0)
+
+# Face context: the superficial expression muscles, drawn to give the skull a face. They are parts of
+# muscles-head.json flagged `context` (not picked, selected or listed). id -> (source names with "{s}", skin joints).
+# Around the mouth and chin they lie on the jaw bone, so those blend between the skull and the jaw by distance
+# (the upper lip follows the skull, the lower lip and chin the jaw, the corners of the mouth both). The muscles of
+# the eyebrow (the orbital ring's upper half, corrugator, procerus) rise with `brow` over BROW_RISE, mm of height
+# relative to the brow joint, so lifting the frontalis's lower edge doesn't open a gap above the eye.
+BROW_RISE = (-22.0, -6.0)
+FACE = {
+    "face-orbicularis-oculi": (["{s} orbital part of orbicularis oculi", "{s} palpebral part of orbicularis oculi"], ["head", "brow"]),
+    "face-corrugator-supercilii": (["{s} corrugator supercilii"], ["head", "brow"]),
+    "face-procerus": (["{s} procerus"], ["head", "brow"]),
+    "face-nasalis": (["{s} nasalis"], ["head"]),
+    "face-levator-labii-superioris": (["{s} levator labii superioris"], ["head", "jaw"]),
+    "face-zygomaticus-major": (["{s} zygomaticus major"], ["head", "jaw"]),
+    "face-zygomaticus-minor": (["{s} zygomaticus minor"], ["head", "jaw"]),
+    "face-risorius": (["{s} risorius"], ["head", "jaw"]),
+    "face-orbicularis-oris": (["{s} orbicularis oris"], ["head", "jaw"]),
+    "face-depressor-anguli-oris": (["{s} depressor anguli oris"], ["head", "jaw"]),
+    "face-depressor-labii-inferioris": (["{s} depressor labii inferioris"], ["head", "jaw"]),
+    "face-mentalis": (["{s} mentalis"], ["head", "jaw"]),
 }
 # extra sources that only contribute their part below the neck atlas's cut (the lumbar half of the long back extensors)
 BELOW_CUT = {"lumbar-erectors": ["{s} longissimus thoracis", "{s} spinalis thoracis"]}

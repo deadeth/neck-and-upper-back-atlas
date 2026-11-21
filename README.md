@@ -12,9 +12,9 @@ Every exercise and lift plays on a full skeleton, with the worked muscles highli
 
 ## What's in it
 
-- A real-anatomy skeleton with 59 muscles in five regions, left and right.
-- A pain finder for every region: pick where it hurts or what sets it off (56 patterns in all), and the likely muscles light up in ranked order. Every muscle has notes on how it tends to hurt, what sets it off and a quick check, and every region lists its warning signs.
-- Neck and upper back, and lower back and core, also have 30 animated stretches and control exercises. Stretches for shoulders, hips and legs are still to come; until then those muscles list the lifts that train them.
+- A real-anatomy skeleton with 65 muscles in six regions, left and right, from the jaw to the feet. The face's expression muscles are drawn in over the skull.
+- A pain finder for every region: pick where it hurts or what sets it off (69 patterns in all), and the likely muscles light up in ranked order. Every muscle has notes on how it tends to hurt, what sets it off and a quick check, and every region lists its warning signs.
+- Head, face and jaw, neck and upper back, and lower back and core also have 36 animated stretches and control exercises, including jaw exercises on a jaw that opens and slides as a real one does. Stretches for shoulders, hips and legs are still to come; until then those muscles list the lifts that train them.
 - Three strength days with 16 lifts, 13 of them new animations.
 - Search across muscles, exercises, lifts, pain patterns, regions and days, with everyday names and gym slang ("traps", "six pack", "rdl", "sciatica").
 - A Real time switch on the exercise player turns it into a guided session: it waits for Start, holds last as long as the instruction says, reps and sets are counted from the written dose, and rests are timed between sets, sides and long holds.
@@ -32,7 +32,7 @@ The site is static and lives in `docs/`. There's no build step for the page.
 | `docs/app.js` | Modes, regions, panel views, navigation, lazy loading |
 | `docs/anatomy.js` | The clickable atlas scene |
 | `docs/figure.js` | The exercise skeleton: joints, arm and leg IK, skinned muscles, props |
-| `docs/moves.js`, `moves-core.js`, `moves-strength.js` | Keyframes for each exercise and lift |
+| `docs/moves.js`, `moves-head.js`, `moves-core.js`, `moves-strength.js` | Keyframes for each exercise and lift |
 | `docs/content.js`, `content-body.js` | Regions, muscle notes, pain patterns, exercise instructions, strength days |
 | `docs/areas.js` | Turns a pain pattern's body area into glow spots |
 | `docs/search.js` | Search matching and ranking (pure functions) |

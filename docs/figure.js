@@ -18,10 +18,11 @@ const DIM = new THREE.Color(0x6f5a5c);
 const TENDON = 0xeee3d3;   // aponeuroses: a pale translucent sheet, drawn as in anatomy.js
 const TENDON_OPACITY = 0.34;
 const WHITE = new THREE.Color(0xffffff);
+const CONTEXT = 0xaa655e;   // the face's expression muscles, drawn as in anatomy.js
 
 const PARENT = {
   pelvis: null, l5: "pelvis", l4: "l5", l3: "l4", l2: "l3", l1: "l2", thorax: "l1",
-  c7: "thorax", c6: "c7", c5: "c6", c4: "c5", c3: "c4", c2: "c3", c1: "c2", head: "c1",
+  c7: "thorax", c6: "c7", c5: "c6", c4: "c5", c3: "c4", c2: "c3", c1: "c2", head: "c1", jaw: "head", brow: "head",
   clavL: "thorax", clavR: "thorax", scapL: "thorax", scapR: "thorax",
   femL: "pelvis", tibL: "femL", footL: "tibL", femR: "pelvis", tibR: "femR", footR: "tibR",
   humL: null, ulnaL: null, radL: "ulnaL", humR: null, ulnaR: null, radR: "ulnaR",
@@ -48,6 +49,7 @@ const NUM = ["lum", "thor", "neck", "head", "shL", "shR", "hipL", "hipR"];
 const ZERO = {
   root: { p: [0, 0.88, 0], r: [0, 0, 0] }, lum: [0, 0, 0], thor: [0, 0, 0], neck: [0, 0, 0], head: [0, 0, 0],
   shL: [0, 0, 0], shR: [0, 0, 0], hipL: [0, 0], hipR: [0, 0], kneeL: 0, kneeR: 0, ankL: 0, ankR: 0,
+  jaw: 0, jawSide: 0, brow: 0,
 };
 
 const flipX = (v) => v && [-v[0], v[1], v[2]];
@@ -149,12 +151,12 @@ export function createFigure(canvas, model, buffer, meta) {
   function addMuscles(parts, buf, region) {
     for (const part of parts) {
       const layer = meta[part.id] ? meta[part.id].layer : 2;
-      const mat = new THREE.MeshStandardMaterial({ color: LAYER_COLOUR[layer], roughness: 0.56, side: THREE.DoubleSide });
+      const mat = new THREE.MeshStandardMaterial({ color: part.context ? CONTEXT : LAYER_COLOUR[layer], roughness: 0.56, side: THREE.DoubleSide });
       const [flesh, sheet] = splitTendon(geometry(part, buf, CM, true), part);
       const m = new THREE.SkinnedMesh(flesh, mat);
       m.frustumCulled = false;
       m.visible = false;
-      m.userData = { id: part.id, side: part.side, layer, region, base: new THREE.Color(LAYER_COLOUR[layer]) };
+      m.userData = { id: part.id, side: part.side, layer, region, base: new THREE.Color(LAYER_COLOUR[layer]), context: !!part.context };
       scene.add(m);
       m.bind(skeleton, new THREE.Matrix4());   // geometry is in rest coordinates whatever pose the skeleton is in now
       muscles.push(m);
@@ -240,6 +242,50 @@ export function createFigure(canvas, model, buffer, meta) {
     const out = hit ? hit.point.clone().addScaledVector(dir, -(spec.clear || 0.016)).sub(origin).toArray() : spec.p;
     snapCache.set(key, out);
     return out;
+  }
+
+  // ---------- jaw and brows ----------
+  // Opening (`jaw`, degrees) turns the jaw about the line through both condyles. Past 5 degrees the condyles also
+  // slide forward, slowly at first and 1 cm by 30 degrees, dropping as the scanned joint surface does (rig.jawPath),
+  // so each stays against the bone above it. A sideways glide (`jawSide`, cm at the chin, + to the model's left)
+  // turns the jaw about the condyle on that side; the other condyle swings forward and down the same path, and the
+  // whole jaw shifts a little sideways (the Bennett movement). `brow` (cm) lifts the brows up the forehead.
+  const jawAxis = new V3().fromArray(R.jawAxis).normalize(), jawPath = R.jawPath;
+  const browRest = bone.brow.position.clone(), browDir = new V3().fromArray(R.browDir).normalize();
+  const jawSlide = (deg) => (deg <= 5 ? 0 : Math.pow((deg - 5) / 25, 1.5));   // cm forward
+  function jawDrop(s) {   // cm down for s cm forward, from the table
+    const i = Math.min(Math.floor(s / 0.1), jawPath.length - 2), u = THREE.MathUtils.clamp(s / 0.1 - i, 0, 1);
+    return jawPath[i][1] + (jawPath[i + 1][1] - jawPath[i][1]) * u;
+  }
+  const jm = { o: new THREE.Matrix4(), s: new THREE.Matrix4(), t: new THREE.Matrix4(), cw: new V3(), d: new V3() };
+  const BENNETT = 0.15;   // share of a sideways glide that is a bodily shift
+  function poseJaw(deg, side) {
+    const J0 = rest.jaw, s = jawSlide(deg), Z = new V3(0, 0, 1), Yv = new V3(0, 1, 0);
+    if (!deg && !side) { bone.jaw.quaternion.identity(); bone.jaw.position.copy(J0).sub(rest.head); return; }   // the scanned rest
+    jm.d.set(0, -jawDrop(s), s).multiplyScalar(CM);
+    // open: turn about the hinge through J0, then slide
+    jm.o.makeTranslation(J0.x + jm.d.x, J0.y + jm.d.y, J0.z + jm.d.z).multiply(jm.t.makeRotationAxis(jawAxis, deg * D2R)).multiply(new THREE.Matrix4().makeTranslation(-J0.x, -J0.y, -J0.z));
+    jm.s.identity();
+    if (side) {
+      const sg = Math.sign(side), cw = (sg > 0 ? rest.tmjL : rest.tmjR), cb = (sg > 0 ? rest.tmjR : rest.tmjL);
+      jm.cw.copy(cw).add(jm.d);
+      // the chin's glide is the turn about the upright through cw, the tilt as the other condyle drops, and the shift
+      const span = Math.abs(cw.x - cb.x), reach = rest.chin.z - cw.z, below = cw.y - rest.chin.y;
+      let yaw = ((1 - BENNETT) * side * CM) / reach, roll = 0;
+      for (let k = 0; k < 3; k++) {
+        const swing = (Math.abs(yaw) * span) / CM;   // cm the other condyle swings forward
+        roll = sg * Math.atan(((jawDrop(s + swing) - jawDrop(s)) * CM) / span);
+        yaw = ((1 - BENNETT) * side * CM - below * Math.sin(roll)) / reach;
+      }
+      jm.s.makeTranslation(jm.cw.x + BENNETT * side * CM, jm.cw.y, jm.cw.z)
+        .multiply(jm.t.makeRotationAxis(Z, roll)).multiply(new THREE.Matrix4().makeRotationAxis(Yv, yaw))
+        .multiply(new THREE.Matrix4().makeTranslation(-jm.cw.x, -jm.cw.y, -jm.cw.z));
+    }
+    // jaw bone (child of head, holder at -J0): head-local position of a point p is jaw.position + q (p - J0)
+    const m = jm.s.multiply(jm.o), pos = new V3(), quat = new THREE.Quaternion(), sc = new V3();
+    m.decompose(pos, quat, sc);
+    bone.jaw.quaternion.copy(quat);
+    bone.jaw.position.copy(J0).applyMatrix4(m).sub(rest.head);
   }
 
   // ---------- props ----------
@@ -338,6 +384,7 @@ export function createFigure(canvas, model, buffer, meta) {
       const mat = m.material;
       m.visible = regions.has(region);
       if (!m.visible) continue;
+      if (m.userData.context) { m.castShadow = true; continue; }   // the face: drawn plain, never lit or ghosted
       const isT = ids.includes(mid) && onSide(m);
       if (m.userData.tendon) {
         // a target's sheet is a lighter tint of the target colour; any other sheet is ghosted so it never veils one
@@ -409,8 +456,8 @@ export function createFigure(canvas, model, buffer, meta) {
     if (angle === "side") { v.yaw = 90; v.pitch = lying ? 14 : 5; }
     if (angle === "back") { v.yaw = 180; v.pitch = lying ? 40 : 6; }
     if (frame === "close") {
-      // frame the neck and shoulders so the working muscle fills the view
-      const c = bone.c7.getWorldPosition(new V3());
+      // frame the neck and shoulders so the working muscle fills the view; `closeAt` (a point in the head frame) frames the face
+      const c = move.closeAt ? bone.head.localToWorld(new V3().fromArray(move.closeAt)) : bone.c7.getWorldPosition(new V3());
       v.target = [c.x, c.y + (lying ? 0 : 0.01), c.z];
       v.dist = move.closeDist || 1.45;
       if (lying) v.pitch = Math.max(v.pitch, 24);
@@ -626,6 +673,9 @@ export function createFigure(canvas, model, buffer, meta) {
     // the top two joints: nodding mostly at the skull, turning mostly between C1 and C2
     bone.c1.rotation.set(P.head[0] * 0.3 * D2R, P.head[1] * 0.8 * D2R, P.head[2] * 0.3 * D2R);
     bone.head.rotation.set(P.head[0] * 0.7 * D2R, P.head[1] * 0.2 * D2R, P.head[2] * 0.7 * D2R);
+    const sc = (k) => A[k] + (B[k] - A[k]) * u;
+    poseJaw(sc("jaw"), sc("jawSide"));
+    bone.brow.position.copy(browRest).addScaledVector(browDir, sc("brow") * CM);
     for (const [side, sx] of [["L", 1], ["R", -1]]) {
       const hip = P["hip" + side];
       bone["fem" + side].rotation.set(-hip[0] * D2R, 0, hip[1] * D2R * sx);

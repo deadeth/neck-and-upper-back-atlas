@@ -16,12 +16,14 @@ const VIEW_HINT = {
   "pectoralis-major": "front", "pectoralis-minor": "front", "serratus-anterior": "left", "subscapularis": "front", "coracobrachialis": "front",
   "deltoid-anterior": "frontLeft", "deltoid-middle": "left", "biceps-brachii": "frontLeft", "brachialis": "frontLeft", "brachioradialis": "frontLeft", "forearm-flexors": "front",
   "tensor-fasciae-latae": "frontLeft", "adductors": "front",
+  "masseter": "frontLeft", "temporalis": "left", "medial-pterygoid": "left", "lateral-pterygoid": "left", "digastric": "frontBelow", "frontalis": "front",
   "rectus-femoris": "front", "vasti": "frontLeft", "sartorius": "frontLeft", "tibialis-anterior": "frontLeft", "fibulares": "left",
 };
 // deep muscles hidden behind bone from every side: the bones turn see-through when these are selected
-const XRAY = new Set(["deep-neck-flexors", "iliopsoas", "subscapularis"]);
-const REGION_VIEW = { shoulder: "front", leg: "front" };   // camera side when a region opens; default from behind
+const XRAY = new Set(["deep-neck-flexors", "iliopsoas", "subscapularis", "medial-pterygoid", "lateral-pterygoid"]);
+const REGION_VIEW = { shoulder: "front", leg: "front", head: "front" };   // camera side when a region opens; default from behind
 const DAY_VIEW = { pull: "back", push: "front", legs: "back" };   // the side a day's main muscles sit on
+const PATTERN_VIEW = { head: "frontLeft" };   // a pain pattern's side when most of its muscles aren't on the front; default from behind
 const MOVE_HINT = "Drag to rotate, scroll to zoom, click a muscle";
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
@@ -60,14 +62,14 @@ function dayMuscles(day) {
   return { main, also: uniq(day.exercises.flatMap((id) => worksOn(id).also)).filter((m) => !main.includes(m)) };
 }
 const regionsOf = (ids) => uniq(ids.filter((id) => M[id]).map((id) => M[id].region));
-// every region with a muscle that strength mode shows; strength mode loads these up front
-const STRENGTH_REGIONS = regionsOf(STRENGTH.flatMap((d) => { const x = dayMuscles(d); return [...x.main, ...x.also]; }));
+// every region with a muscle that strength mode shows, and the head so the whole body has a face; loaded up front
+const STRENGTH_REGIONS = uniq([...regionsOf(STRENGTH.flatMap((d) => { const x = dayMuscles(d); return [...x.main, ...x.also]; })), "head"]);
 
 // ---------- navigation ----------
 // Each mode keeps its own back stack, so switching mode and back returns you where you were.
 // In pain mode every entry carries the region it belongs to, so Back also restores the region.
 let mode = "pain";
-const navs = { pain: [{ view: "home", region: REGIONS[0].id }], strength: [{ view: "home" }] };
+const navs = { pain: [{ view: "home", region: "neck" }], strength: [{ view: "home" }] };   // the landing region
 const nav = () => navs[mode];
 const cur = () => nav()[nav().length - 1];
 function regionFor(view, id) {
@@ -458,7 +460,7 @@ function stageSpec(s) {
   let ids = [], ranked = false, title = "", sub = MOVE_HINT, view, fig = null, wide = false;
   const fallback = strength ? "front" : REGION_VIEW[s.region] || "back";
   if (s.view === "home") { title = strength ? "Whole body" : R[s.region].name; view = fallback; }
-  else if (s.view === "pattern") { ids = Pt[s.id].muscles.map((x) => x.id); ranked = true; title = Pt[s.id].name; sub = "Likely muscles, brightest first"; view = sideFor(ids, "back"); }
+  else if (s.view === "pattern") { ids = Pt[s.id].muscles.map((x) => x.id); ranked = true; title = Pt[s.id].name; sub = "Likely muscles, brightest first"; view = sideFor(ids, PATTERN_VIEW[s.region] || "back"); }
   else if (s.view === "group") { ids = MUSCLES.filter((m) => m.group === s.id).map((m) => m.id); title = Gp[s.id].name; sub = count(ids.length, "muscle"); view = sideFor(ids, fallback); }
   else if (s.view === "muscle") { ids = [s.id]; title = M[s.id].name; sub = M[s.id].latin; view = sideFor(ids); }
   else if (s.view === "day") { ids = dayMuscles(D[s.id]).main; title = `${D[s.id].name} day`; sub = `Trains ${count(ids.length, "muscle")}`; view = DAY_VIEW[s.id] || "back"; wide = true; }

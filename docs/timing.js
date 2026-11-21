@@ -56,6 +56,14 @@ export const REAL = {
   "thoracic-extension": { reps: 10 },
   "prone-cobra": { hold: 7.5, tempo: { 2: 1.5, 4: 3.6 }, reps: 8 },
 
+  // head, face and jaw
+  "jaw-rest": { hold: 10, reps: 5, unit: "hold" },
+  "jaw-opening": { hold: 2, tempo: { 1: 3, 3: 3.5 }, reps: 5 },   // slow opens and closes, about 3 s each way
+  "jaw-open-resisted": { hold: 5, reps: 5, unit: "hold" },
+  "jaw-sideways": { hold: 5, reps: 10, eachSide: true, unit: "hold", sideRest: 10 },
+  "jaw-massage": { tempo: { 1: 60, 2: 60 }, reps: 1 },   // about a minute on the cheeks, then on the temples
+  "forehead-release": { hold: 2, reps: 5 },
+
   // lower back and core
   "cat-cow": { reps: 8 },
   "childs-pose": { hold: 25, reps: 2, unit: "hold", rest: 10 },

@@ -21,16 +21,20 @@ import scipy.sparse as sp
 import trimesh
 import fast_simplification
 from scipy.spatial import cKDTree
+from scipy.sparse.csgraph import connected_components
+from scipy.sparse.linalg import spsolve
 from scipy.ndimage import gaussian_filter1d
 
 from parts import (MUSCLES, SKULL, CERV, THOR, LUMB, RIBS, STERNUM, CARPUS, METACARPALS, DIGITS, FOOT_RE, TOES_RE, TOE_RAYS, LEVELS,
                    MUSCLE_KEEP, CUT_Z, HUMERUS_CUT_Z, ORIGIN, REGION_UNITS, BELOW_CUT, REGION_KEEP)
 from parts import SHEATH_UNITS, SHEATH_BORDER, SHEATH_FRONT_Y
+from parts import MANDIBLE, RIGHT_NAMES, TENDON_MESHES, BROW_FADE, BROW_RISE, FACE
 
 CT = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
 NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
 SKIN_JOINTS = (["head", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "thorax", "l1", "l2", "l3", "l4", "l5", "pelvis"]
-               + [j + S for S in "LR" for j in ("clav", "scap", "hum", "ulna", "rad", "hand", "fem", "tib", "foot")])
+               + [j + S for S in "LR" for j in ("clav", "scap", "hum", "ulna", "rad", "hand", "fem", "tib", "foot")]
+               + ["jaw", "brow"])   # appended, so every earlier index stays valid
 
 
 def read_glb(path):
@@ -188,18 +192,20 @@ def to_model(p):
     return np.stack([(p[:, 0] - ox) / 10.0, (p[:, 2] - oz) / 10.0, -(p[:, 1] - oy) / 10.0], axis=1)
 
 
-def skin_weights(p, f, allowed, trees):
-    """Distance-weighted blend between the bones a muscle attaches to. Returns (idx Nx4 u8, w Nx4 u8)."""
-    dist = np.stack([trees[j].query(p)[0] for j in allowed], axis=1)
-    w = 1.0 / np.power(dist + 2.0, 3)
-    w /= w.sum(axis=1, keepdims=True)
+def skin_weights(p, f, allowed, trees, w=None, rounds=6):
+    """Distance-weighted blend between the bones a muscle attaches to. Returns (idx Nx4 u8, w Nx4 u8).
+    `w` (N x len(allowed)), when given, replaces the distance weights before `rounds` of smoothing."""
+    if w is None:
+        dist = np.stack([trees[j].query(p)[0] for j in allowed], axis=1)
+        w = 1.0 / np.power(dist + 2.0, 3)
+        w /= w.sum(axis=1, keepdims=True)
     # smooth along mesh edges so neighbouring vertices don't tear apart
     e = np.vstack([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]]])
     n = len(p)
     adj = sp.coo_matrix((np.ones(len(e) * 2), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])), shape=(n, n)).tocsr()
     adj.data[:] = 1.0
     deg = np.maximum(np.asarray(adj.sum(axis=1)).ravel(), 1.0)
-    for _ in range(6):
+    for _ in range(rounds):
         w = 0.5 * w + 0.5 * (adj @ w) / deg[:, None]
     k = min(4, len(allowed))
     top = np.argsort(-w, axis=1)[:, :k]
@@ -285,6 +291,79 @@ def toe_rig(bones, s):
     return centre, axis / np.linalg.norm(axis)
 
 
+def brow_blend(p, fade):
+    """skull and brow weights for the frontalis: the brow carries its lower edge (its lowest point at each 3 mm of
+    side-to-side position), fading to the skull between fade[0] and fade[1] mm above it"""
+    bins = np.round(p[:, 0] / 3.0)
+    edge = {b: p[bins == b, 2].min() for b in np.unique(bins)}
+    t = np.clip((p[:, 2] - np.array([edge[b] for b in bins]) - fade[0]) / (fade[1] - fade[0]), 0.0, 1.0)
+    b = 1.0 - t * t * (3.0 - 2.0 * t)
+    return np.stack([1.0 - b, b], axis=1)
+
+
+def attach_blend(p, f, trees, reach=2.5, link=4.0, gap=6.0):
+    """skull and jaw weights for a chewing muscle: 1 on the jaw where the mesh lies on the jaw bone, 0 where it lies
+    on the skull (within `reach` mm; the nearer bone wins where both are that close), and harmonic in between, so the
+    belly stretches evenly while both attachments stay on their bones. Vertices `link` mm apart count as neighbours
+    as well as the mesh's edges, so the outer face of a thick muscle follows its inner face on the bone. A piece that
+    stops short of a bone (the scanned lateral pterygoid ends 3 to 4 mm in front of the condyle) is fixed to it at its
+    end nearest that bone, if that is within `gap` mm. A piece that still touches only one bone keeps the distance
+    weights."""
+    dh, dj = trees["head"].query(p)[0], trees["jaw"].query(p)[0]
+    w = 1.0 / np.power(np.stack([dh, dj], axis=1) + 2.0, 3)
+    w = w[:, 1] / w.sum(axis=1)
+    n = len(p)
+    e = np.vstack([f[:, [0, 1]], f[:, [1, 2]], f[:, [2, 0]], cKDTree(p).query_pairs(link, output_type="ndarray")])
+    adj = sp.coo_matrix((np.ones(len(e) * 2), (np.r_[e[:, 0], e[:, 1]], np.r_[e[:, 1], e[:, 0]])), shape=(n, n)).tocsr()
+    adj.data[:] = 1.0
+    fixed = np.full(n, np.nan)
+    fixed[(dh < reach) & (dh <= dj)] = 0.0
+    fixed[(dj < reach) & (dj < dh)] = 1.0
+    _, comp = connected_components(adj, directed=False)
+    for c in np.unique(comp):
+        on = comp == c
+        for val, d, other in ((0.0, dh, dj), (1.0, dj, dh)):
+            if not np.any(fixed[on] == val) and d[on].min() < gap:
+                fixed[on & (d < d[on].min() + 1.5) & (d < other)] = val
+        if not (np.any(fixed[on] == 0.0) and np.any(fixed[on] == 1.0)):
+            continue
+        idx = np.flatnonzero(on)
+        free, done = idx[np.isnan(fixed[idx])], idx[~np.isnan(fixed[idx])]
+        w[done] = fixed[done]
+        if len(free):
+            lap = sp.diags(np.asarray(adj.sum(axis=1)).ravel()) - adj
+            w[free] = spsolve(lap[free][:, free].tocsc(), -(lap[free][:, done] @ fixed[done]))
+    return np.stack([1.0 - w, w], axis=1)
+
+
+def condyle_path(mand, temporal, x, step=1.0, reach=14.0):
+    """How far a jaw condyle has to drop (mm) as it slides forward s mm along the underside of the temporal bone
+    (the joint's socket, then the bump in front of it), from the bone section through the condyle's centre.
+    Returns (s, drop) arrays; the drop keeps the rest gap between the condyle's top and the bone above it."""
+    def section(p, f):
+        sec = trimesh.Trimesh(p, f, process=False).section([1, 0, 0], [x, 0, 0])
+        return np.vstack(sec.discrete)[:, 1:]   # (y, z)
+    c, t = section(*mand), section(*temporal)
+    top = c[:, 1].max()
+    yt = c[c[:, 1].argmax(), 0]
+    c = c[(c[:, 1] > top - 8) & (c[:, 0] > yt - 12) & (c[:, 0] < yt + 1)]   # the condyle's top and front outline
+    ys = np.arange(c[:, 0].min(), c[:, 0].max(), 0.25)
+    cz = np.array([c[np.abs(c[:, 0] - y) < 0.6, 1].max() for y in ys])
+    t = t[(t[:, 1] > top - 6) & (t[:, 1] < top + 12)]
+
+    def under(y):   # lowest temporal outline above the condyle's level at each y (source y, mm)
+        out = np.full(len(y), np.inf)
+        for i, v in enumerate(y):
+            near = t[np.abs(t[:, 0] - v) < 0.6, 1]
+            if len(near):
+                out[i] = near.min()
+        return out
+    gap = (under(ys) - cz).min()
+    s = np.arange(0.0, reach + 1e-6, step)
+    drop = np.array([max(0.0, (cz + gap - under(ys - v)).max()) for v in s])   # forward is -y in the source
+    return s, np.maximum.accumulate(drop)
+
+
 def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
     muscles = read_glb(anatomy_path)
     bones = read_glb(skeleton_path)
@@ -319,6 +398,7 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
 
     # ---------- bones ----------
     bone("skull", SKULL, "head", "skull", 0.28, True, True)
+    bone("mandible", MANDIBLE, "jaw", "jaw", 0.28, True, True)
     for i, n in enumerate(CERV):
         bone(f"c{i + 1}", [n], f"c{i + 1}", "cervical", 0.6, True, True)
     bone("thoracic", THOR, "thorax", "thoracic", 0.55, True, True)
@@ -390,9 +470,35 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         J["scap" + S] = bones[f"{s} scapula"][0].mean(axis=0)
     J["pelvis"] = (J["femL"] + J["femR"]) / 2
     floor = min(bones[n][0][:, 2].min() for n in matching(FOOT_RE, "left"))
+    # the jaw: each condyle's head (the top 10 mm of the jaw bone's hindmost 22 mm), the hinge midway between them
+    # on the line through both, the front of the chin, and the brow (the most forward point between the eyebrows)
+    md = bones["mandible"][0]
+    path = []
+    for s, S, sg in (("left", "L", 1.0), ("right", "R", -1.0)):
+        c = md[(md[:, 0] * sg > 30) & (md[:, 1] > md[:, 1].max() - 22)]
+        J["tmj" + S] = c[c[:, 2] > c[:, 2].max() - 10].mean(axis=0)
+        path.append(condyle_path(bones["mandible"], bones[f"{s} temporal bone"], J["tmj" + S][0]))
+    J["jaw"] = (J["tmjL"] + J["tmjR"]) / 2
+    sym = md[np.abs(md[:, 0]) < 4]
+    J["chin"] = sym[np.argmin(sym[:, 1])] * [0, 1, 1]
+    fr = bones["frontal bone"][0]
+    gl = fr[(np.abs(fr[:, 0]) < 4) & (fr[:, 2] > 1515) & (fr[:, 2] < 1550)]
+    J["brow"] = gl[np.argmin(gl[:, 1])] * [0, 1, 1]
+    # the brows lift along the frontalis's lower part: the slope of its front face over the 25 mm above its lower edge,
+    # the median of 3 mm wide strips across the forehead
+    fs = np.vstack([weld(*muscles[f"{s} frontalis"])[0] for s in ("left", "right")])
+    slopes = []
+    for x in np.arange(-36.0, 37.0, 6.0):
+        st = fs[np.abs(fs[:, 0] - x) < 1.5]
+        h = st[:, 2] - st[:, 2].min()
+        bands = [st[(h >= a) & (h < a + 3)] for a in range(0, 25, 3)]
+        front = np.array([q[np.argmin(q[:, 1])] for q in bands if len(q)])
+        slopes.append(np.polyfit(front[:, 2], front[:, 1], 1)[0])
+    brow_dir = float(np.median(slopes))   # source y per mm of height
 
     # ---------- muscles ----------
-    cloud = {"head": pts(*SKULL), "thorax": pts(*THOR, *RIBS, *STERNUM), "pelvis": pts("left hip bone", "right hip bone", "sacrum")}
+    # the neck muscles are weighted against the whole skull, jaw included; the head's own muscles use head_trees
+    cloud = {"head": pts(*SKULL, *MANDIBLE), "thorax": pts(*THOR, *RIBS, *STERNUM), "pelvis": pts("left hip bone", "right hip bone", "sacrum")}
     for i, n in enumerate(CERV):
         cloud[f"c{i + 1}"] = pts(n)
     for i, n in enumerate(LUMB):
@@ -407,7 +513,9 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         cloud["fem" + S] = pts(f"{s} femur")
         cloud["tib" + S] = pts(f"{s} tibia", f"{s} fibula")
         cloud["foot" + S] = pts(*matching(FOOT_RE, s))
+    cloud["jaw"] = pts(*MANDIBLE)
     trees = {k: cKDTree(v) for k, v in cloud.items()}
+    head_trees = dict(trees, head=cKDTree(pts(*SKULL)))   # skull and jaw apart
 
     for mid, (names, mirrored, joints) in MUSCLES.items():
         left = merge([prep(muscles, n.format(s="left"), MUSCLE_KEEP, CUT_Z) for n in names])
@@ -418,6 +526,7 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
 
     # the rest of the body, region by region
     left_names = [n for n in muscles if re.search(r"\bleft\b", n)]
+    brow_of = {}
     for region, units in REGION_UNITS.items():
         for uid, (rx, joints, _layer) in units.items():
             names = sorted(n for n in left_names if re.search(rx, n))
@@ -425,7 +534,8 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
                 raise KeyError(f"{uid}: no source mesh matches {rx}")
             for s_, S in (("left", "L"), ("right", "R")):
                 side = lambda n: re.sub(r"\bleft\b", s_, n)
-                meshes = [prep(muscles, side(n), REGION_KEEP) for n in names]
+                src = RIGHT_NAMES[uid] if s_ == "right" and uid in RIGHT_NAMES else [side(n) for n in names]
+                meshes = [prep(muscles, n, REGION_KEEP) for n in src if n not in TENDON_MESHES]
                 for extra in BELOW_CUT.get(uid, []):
                     pe, fe = clip_below(*weld(*muscles[extra.format(s=s_)]), CUT_Z)
                     meshes.append(simplify(pe, fe, REGION_KEEP))
@@ -436,8 +546,29 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
                     border = rectus_border(*weld(*muscles[SHEATH_BORDER.format(s=s_)]), sg)
                     p, f, nf = split_sheath(*drop_debris(p, f), border, sg, SHEATH_FRONT_Y)
                     extra["tendon"] = nf
-                idx, w = skin_weights(p, f, [j.format(S=S) for j in joints], trees)
+                tendons = [n for n in src if n in TENDON_MESHES]
+                if tendons:   # whole tendon meshes (the digastric's intermediate tendon) go last, drawn as tendon
+                    extra["tendon"] = len(f)
+                    p, f = merge([(p, f)] + [prep(muscles, n, REGION_KEEP) for n in tendons])
+                w = brow_blend(p, BROW_FADE) if "brow" in joints else attach_blend(p, f, head_trees) if "jaw" in joints else None
+                if "brow" in joints:
+                    brow_of[S] = (cKDTree(p), w[:, 1])   # the face's brow muscles go no higher than the frontalis
+                rounds = 0 if "jaw" in joints else 6   # harmonic weights are smooth already
+                idx, w = skin_weights(p, f, [j.format(S=S) for j in joints], head_trees if region == "head" else trees, w, rounds)
                 parts.append(dict(id=uid, kind="muscle", side=S, name=uid, joint="", region=region, p=p, f=f, skin=(idx, w), **extra))
+
+    # the face: expression muscles drawn for context in muscles-head.json, flagged `context` (see FACE in parts.py)
+    for fid, (names, joints) in FACE.items():
+        for s_, S in (("left", "L"), ("right", "R")):
+            p, f = merge([prep(muscles, n.format(s=s_), REGION_KEEP) for n in names])
+            w = None
+            if "brow" in joints:   # up with the brow above the eye, by height, and no more than the frontalis beside it
+                t = np.clip((p[:, 2] - J["brow"][2] - BROW_RISE[0]) / (BROW_RISE[1] - BROW_RISE[0]), 0.0, 1.0)
+                tree, wf = brow_of[S]
+                t = np.minimum(t * t * (3.0 - 2.0 * t), wf[tree.query(p)[1]])
+                w = np.stack([1.0 - t, t], axis=1)
+            idx, w = skin_weights(p, f, joints, head_trees, w)
+            parts.append(dict(id=fid, kind="muscle", side=S, name=fid, joint="", region="head", p=p, f=f, skin=(idx, w), context=True))
 
     # ---------- pack ----------
     levels = []
@@ -471,6 +602,8 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         }
         if "tendon" in part:
             entry["tendon"] = int(part["tendon"]) * 3   # indices from here on draw the aponeurosis
+        if part.get("context"):
+            entry["context"] = True   # drawn to give the skull a face; not a muscle of the atlas
         if "skin" in part:
             entry["so"] = put(np.hstack(part["skin"]).astype(np.uint8))   # N x 8: four joint indices, four weights
         out["parts"].append(entry)
@@ -499,6 +632,13 @@ def main(anatomy_path, skeleton_path, sacrum_path, out_dir):
         ball, axis = toe_rig(bones, "left" if S == "L" else "right")
         rig["joints"]["toes" + S], rig["toeAxis" + S] = r3(ball), r3(axis)
     rig["joints"].update(FINGER_JOINTS)
+    # jaw hinge (left condyle minus right), how far the condyles drop as they slide forward ([forward, down] in cm,
+    # both sides averaged), and the way the brows lift (up the forehead)
+    axis = to_model(J["tmjL"])[0] - to_model(J["tmjR"])[0]
+    rig["jawAxis"] = r3(axis / np.linalg.norm(axis))
+    rig["jawPath"] = [[round(float(s) / 10.0, 3), round(float(d) / 10.0, 3)] for s, d in zip(path[0][0], (path[0][1] + path[1][1]) / 2)]
+    up = np.array([0.0, 1.0, -brow_dir])   # model: up, and forward by -dy/dz of the source
+    rig["browDir"] = r3(up / np.linalg.norm(up))
 
     for name, out in files.items():
         doc = {"parts": out["parts"], "data": base64.b64encode(bytes(out["blob"])).decode("ascii")}

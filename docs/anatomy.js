@@ -12,12 +12,12 @@ const DIM = new THREE.Color(0x6f5a5c);
 const BONE = 0xe7dec9;
 const BONE_NAMES = {
   skull: "Skull", cervical: "Cervical spine (C1 to C7)", thoracic: "Thoracic spine (T1 to T12)", lumbar: "L1 vertebra",
-  ribs: "Ribs", sternum: "Breastbone", scapula: "Shoulder blade", clavicle: "Collarbone", humerus: "Upper arm bone",
+  jaw: "Jaw bone", ribs: "Ribs", sternum: "Breastbone", scapula: "Shoulder blade", clavicle: "Collarbone", humerus: "Upper arm bone",
   lumbar: "Lumbar spine (L1 to L5)", pelvis: "Pelvis", forearm: "Forearm bones", hand: "Hand", femur: "Thigh bone", shin: "Shin bones", foot: "Foot", toes: "Toes",
 };
 const VIEW_DIR = {
   back: [0, 0.12, -1], front: [0, 0.1, 1], left: [1, 0.08, -0.18], right: [-1, 0.08, -0.18],
-  frontLeft: [0.62, 0.1, 0.78], backLeft: [0.5, 0.2, -0.86], backHigh: [0, 0.45, -1],
+  frontLeft: [0.62, 0.1, 0.78], backLeft: [0.5, 0.2, -0.86], backHigh: [0, 0.45, -1], frontBelow: [0.3, -0.62, 0.72],
 };
 const HOME_TARGET = new THREE.Vector3(0, -1.5, 1.5);
 const HOME_RADIUS = 36;
@@ -33,6 +33,12 @@ const TENDON_OPACITY = 0.34;
 const TENDON_GHOST = 0.06;
 const SHEET_GAP = 3;       // cm: a click on a sheet goes to the muscle this close behind it
 const WHITE = new THREE.Color(0xffffff);
+// Face context (parts flagged `context`: the expression muscles round the eyes, nose and mouth) gives the skull a
+// face. It is the Surface muscle colour, a little muted so the atlas's own muscles stand out, and is never picked,
+// hovered, selected or ghosted: clicks pass through to whatever is behind. It shows with the head region's muscles
+// at the Surface layer only.
+const CONTEXT = new THREE.Color(0xaa655e);   // LAYER_COLOUR[1] with a third less saturation, a touch lighter
+const CONTEXT_DIM = CONTEXT.clone().lerp(DIM, 0.45);   // while something is selected, like the unselected muscles
 
 /**
  * @param canvas    the shared canvas
@@ -141,6 +147,7 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
   });
   const muscles = [];   // meshes
   const bones = [];
+  const context = [];   // face context meshes: drawn, never picked
   const byId = new Map();   // muscleId -> [meshes]
   let n = 0;
   function addPart(part, buf, region) {
@@ -149,6 +156,10 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
     if (part.kind === "bone") {
       mesh = new THREE.Mesh(geo, boneMat);
       bones.push(mesh);
+    } else if (part.context) {
+      mesh = new THREE.Mesh(geo, glowable(new THREE.MeshStandardMaterial({ color: CONTEXT, roughness: 0.6, metalness: 0, side: THREE.DoubleSide })));
+      Object.assign(mesh.userData, { context: true, region });
+      context.push(mesh);
     } else {
       const layer = meta[part.id] ? meta[part.id].layer : 2;
       const base = new THREE.Color(LAYER_COLOUR[layer]);
@@ -244,6 +255,10 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
       mat.opacity = opacity;
       mat.depthWrite = !t;
       m.renderOrder = t ? (m.userData.ghost ? 3 : 2) : 0;
+    }
+    for (const m of context) {
+      m.visible = depth === 1 && (!active || active.has(m.userData.region));
+      m.material.color.copy(any ? CONTEXT_DIM : CONTEXT);
     }
     dirty = true;
   }
@@ -447,7 +462,7 @@ totalEmissiveRadiance += uGlowCol * glowA * 0.55;`);
         // overshoots on wide boxes and falls short on tall ones such as the legs or the whole body
         const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
         box.getCenter(homeTarget);
-        homeRadius = Math.max(half.y, half.x, half.z, 20) * 1.02;
+        homeRadius = Math.max(half.y, half.x, half.z, 12.5) * 1.02;   // the head's muscles span ~9 cm each way (skull and neck need room); every other region's are over 20
       }
       depth = 1;
       apply();

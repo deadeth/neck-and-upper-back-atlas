@@ -20,6 +20,7 @@ const byMuscle = Object.fromEntries(MUSCLES.map((m) => [m.id, m]));
 // ---- regions and their muscle files ----
 ok(regionIds.size === REGIONS.length, "duplicate region id");
 const parts = [];   // { id, side, region }
+const context = [];   // face context parts (addendum 4): drawn, never listed
 for (const r of REGIONS) {
   ok(r.name && typeof r.ready === "boolean", `region ${r.id}: needs name and ready`);
   ok(r.flags === null || (Array.isArray(r.flags) && r.flags.length >= 3), `region ${r.id}: flags must be null or a list of at least 3`);
@@ -33,12 +34,27 @@ for (const r of REGIONS) {
   try { doc = read(`muscles-${r.id}.json`); } catch (e) { errs.push(`region ${r.id}: docs/muscles-${r.id}.json missing or unreadable`); continue; }
   for (const p of doc.parts) {
     ok(p.kind === "muscle", `muscles-${r.id}.json: part ${p.id || p.name} is not a muscle`);
-    parts.push({ id: p.id, side: p.side, region: r.id });
+    ok(!p.context === !/^face-/.test(p.id), `muscles-${r.id}.json: part ${p.id} must be flagged context exactly when its id starts with face-`);
+    if (p.context) {
+      ok(p.context === true && r.id === "head", `muscles-${r.id}.json: context part ${p.id} belongs in muscles-head.json, flagged context: true`);
+      context.push({ id: p.id, side: p.side });
+    } else parts.push({ id: p.id, side: p.side, region: r.id });
   }
 }
 const model = read("model.json");
 ok(!model.parts.some((p) => p.kind === "muscle"), "model.json should hold the skeleton only; muscles go in the region files");
 const sides = (id) => parts.filter((p) => p.id === id).map((p) => p.side).sort().join("");
+for (const id of new Set(context.map((p) => p.id))) {
+  ok(!muscleIds.has(id), `${id}: a face context part can't also be a muscle in content`);
+  ok(context.filter((p) => p.id === id).map((p) => p.side).sort().join("") === "LR", `${id}: context parts are not one left and one right`);
+}
+// the jaw and brow (addendum 4): the mandible is its own bone on the jaw joint, jaw and brow are appended skin joints
+const rig = model.rig;
+for (const j of ["jaw", "tmjL", "tmjR", "chin", "brow"]) ok(Array.isArray(rig.joints[j]) && rig.joints[j].length === 3, `model.json: rig joint ${j} missing`);
+ok(rig.skin.length >= 2 && rig.skin.at(-2) === "jaw" && rig.skin.at(-1) === "brow", "model.json: skin joints must end with jaw, brow");
+ok(rig.skin.indexOf("head") === 0, "model.json: head must stay skin joint 0");
+ok(model.parts.some((p) => p.kind === "bone" && p.name === "jaw" && p.joint === "jaw"), "model.json: no jaw bone on the jaw joint");
+ok(Array.isArray(rig.jawAxis) && Array.isArray(rig.browDir) && Array.isArray(rig.jawPath) && rig.jawPath.length > 1, "model.json: jawAxis, jawPath or browDir missing");
 for (const p of parts) {
   ok(muscleIds.has(p.id), `muscles-${p.region}.json: part ${p.id} has no content`);
   if (byMuscle[p.id]) ok(byMuscle[p.id].region === p.region, `${p.id}: shipped in muscles-${p.region}.json but its group is in region ${byMuscle[p.id].region}`);

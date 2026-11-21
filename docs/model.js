@@ -1,5 +1,6 @@
 // Unpacks model.json: base64 -> ArrayBuffer, and one part -> BufferGeometry (split into muscle and tendon sheet
-// when the part has `tendon`, see docs/contract.md addendum 4).
+// when the part has `tendon`, see docs/contract.md addendum 4). A part flagged `context: true` (the face's expression
+// muscles in muscles-head.json, addendum 4) is ordinary geometry that the scenes draw but never pick or list.
 import * as THREE from "three";
 
 /** decode the base64 payload of a parsed model.json and release the string */

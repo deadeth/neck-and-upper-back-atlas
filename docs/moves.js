@@ -24,6 +24,7 @@
 
 import { CORE_BASES, CORE_MOVES } from "./moves-core.js";
 import { STRENGTH_BASES, STRENGTH_MOVES } from "./moves-strength.js";
+import { HEAD_BASES, HEAD_MOVES } from "./moves-head.js";
 
 export const SEAT = 0.41;   // stool height
 const SKULL = [0, 0.065, 0.015];   // a point inside the skull, in the head frame, for palms to face
@@ -350,5 +351,5 @@ export const MOVES = {
   },
 };
 
-Object.assign(BASES, CORE_BASES, STRENGTH_BASES);
-Object.assign(MOVES, CORE_MOVES, STRENGTH_MOVES);
+Object.assign(BASES, CORE_BASES, STRENGTH_BASES, HEAD_BASES);
+Object.assign(MOVES, CORE_MOVES, STRENGTH_MOVES, HEAD_MOVES);

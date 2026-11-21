@@ -4,6 +4,26 @@
 
 export const REGIONS = [
   {
+    id: "head",
+    name: "Head, face and jaw",
+    blurb: "The chewing muscles, the muscle under the chin and the forehead muscle. Jaw and face pain often comes from the teeth, the jaw joint, the sinuses, the ears or a nerve, and headaches often have no single muscle behind them, so treat these muscles as possible contributors rather than answers.",
+    ready: true,
+    stretches: true,
+    flags: [
+      "Call 999 or go to A&E now: one side of your face droops, you can't lift both arms, or your speech is slurred or muddled. These are signs of a stroke. The same goes for sudden loss of vision, or a headache with a fit, sudden weakness or numbness, confusion or drowsiness.",
+      "Call 999 or go to A&E now: jaw pain with chest pain, or with sweating, feeling sick, dizziness or breathlessness. It can be a heart attack. Don't drive yourself.",
+      "Call 999 or go to A&E now: a headache that came on suddenly and is extremely painful, a headache after a head injury in the last 3 months, or a headache with a very high temperature and a stiff neck, a dislike of bright light, or a rash that doesn't fade when you press a glass on it.",
+      "Call 999 or go to A&E now: blurred or double vision with a severe headache.",
+      "Call 999 or go to A&E now: swelling in your face, mouth or neck that makes it hard to breathe, speak or swallow, or swelling with a mouth you can't open properly. The same goes for a jaw stuck open, or teeth that no longer meet as they did after a blow to the face.",
+      "Same day, GP or NHS 111: a new headache with a tender scalp or temple, jaw pain when you chew or talk, or blurred or double vision. It can be giant cell arteritis (temporal arteritis), and untreated it can lead to loss of sight or a stroke. If your sight is affected, you need to see a hospital eye specialist that day.",
+      "Same day, GP or NHS 111: a jaw that locks or won't open fully, or stops you eating or drinking, or a headache that gets worse when you cough, sneeze, bend or exercise, or comes with being sick.",
+      "Same day, urgent dentist or NHS 111: severe toothache with a swollen face or jaw, a high temperature or swollen glands. It can be a dental abscess, and a dentist, not a GP, treats it.",
+      "See a GP soon: face pain that comes in sudden stabs like electric shocks, set off by touch, washing, eating, brushing your teeth or a breeze. It can be a nerve problem (trigeminal neuralgia) rather than a muscle one, especially once a dentist has ruled out your teeth.",
+      "See a GP or dentist soon: a mouth ulcer that lasts more than 3 weeks, a lump or red or white patch in your mouth, lip or neck, or trouble swallowing that doesn't go; or jaw pain, clicking, toothache or headaches that keep coming back or aren't getting better.",
+    ],
+    aliases: ["head", "face", "jaw", "jaw pain", "tmj", "tmd", "skull", "chewing", "temples"],
+  },
+  {
     id: "neck",
     name: "Neck and upper back",
     blurb: "The muscles that hold up your head and steady your shoulder blades. A common source of stiff necks and tension headaches.",
@@ -88,6 +108,9 @@ export const REGIONS = [
 ];
 
 export const BODY_GROUPS = [
+  { id: "chewing", region: "head", name: "Chewing muscles", blurb: "Four muscles that close, open and steer the jaw. The masseter and temporalis lie just under the skin of the cheek and temple, and the two pterygoids sit deep behind the jaw bone. Clenching and grinding load all four, and their pain overlaps with the jaw joint and the teeth.", aliases: ["jaw muscles", "muscles of mastication", "masticatory muscles", "jaw", "tmj muscles"] },
+  { id: "chin", region: "head", name: "Under the chin", blurb: "The digastric, a two-part muscle under the jaw that helps open the mouth and lifts the voice box when you swallow. Glands, teeth and the throat can all cause pain here too.", aliases: ["floor of the mouth", "chin", "under the jaw", "jaw opener"] },
+  { id: "forehead", region: "head", name: "Forehead", blurb: "The frontalis, the thin muscle that raises your eyebrows. It tightens when you frown, squint or concentrate. Forehead pain can also come from the sinuses, the eyes or a headache that isn't muscular.", aliases: ["brow", "eyebrows", "forehead muscle", "frontal"] },
   { id: "trunk-back", region: "core", name: "Lower back", blurb: "The muscles behind and beside the lower spine, plus the broad latissimus that wraps round from the arm. They hold you upright and steady the spine, and they're where most people feel back pain, even when the true source is hard to pin down.", aliases: ["back muscles", "lumbar", "low back"] },
   { id: "abdominals", region: "core", name: "Abdominals", blurb: "Four layers that wrap the front and sides of the trunk, from the six-pack on the surface to the corset-like transversus underneath. They brace and turn the trunk, and some can refer pain to the back or the groin.", aliases: ["abs", "six pack", "core", "stomach", "belly"] },
   { id: "hip-flexors", region: "core", name: "Deep hip flexor", blurb: "The iliopsoas runs from the lower spine and the inside of the pelvis to the top of the thigh bone. Because it pulls on the lower spine from the front, it can show up as back pain as well as groin pain.", aliases: ["hip flexor", "psoas", "iliopsoas"] },
@@ -105,6 +128,86 @@ export const BODY_GROUPS = [
 ];
 
 export const BODY_MUSCLES = [
+  // ---- head, face and jaw (facts follow docs/research/head-notes.md) ----
+  {
+    id: "masseter", group: "chewing", layer: 1,
+    name: "Masseter (jaw muscle)", latin: "Musculus masseter",
+    does: "Closes the jaw and presses the back teeth together, so it does much of the work of biting and chewing. It also helps push the jaw forward and steadies the jaw joint.",
+    attach: "Two layers. The outer one runs from the cheekbone and its arch down and back to the outside of the angle of the jaw. The deeper one runs almost straight down from the underside of the arch to the upper outer jaw, and some of its fibres blend into the front of the jaw joint.",
+    nerve: "Masseteric nerve, from the mandibular division (V3) of the trigeminal nerve.",
+    ppl: null,
+    pain: "Often felt in the cheek, along the jaw to its angle and in the back teeth. It can reach the ear and the temple, and the deep part can feel as if it's in the jaw joint.",
+    triggers: "Clenching or grinding, by day or in your sleep, chewing gum, biting your nails, hard or chewy food. Stress and long dental appointments may add to it.",
+    check: "Put your fingertips on your cheeks just above the angle of the jaw and clench gently: you'll feel the muscle bulge. Relax, then press lightly on each side. A tight, tender spot that brings on your familiar ache makes this muscle worth considering. It can't tell muscle apart from the jaw joint, the teeth or the sinuses.",
+    aliases: ["jaw muscle", "cheek muscle", "chewing muscle", "clenching", "teeth grinding", "bruxism"],
+    exercises: ["jaw-rest", "jaw-opening", "jaw-massage"],
+  },
+  {
+    id: "temporalis", group: "chewing", layer: 1,
+    name: "Temporalis (temple muscle)", latin: "Musculus temporalis",
+    does: "Lifts the jaw to close the mouth and presses the teeth together. Its back fibres draw the jaw back, and it helps move the jaw from side to side. It's often described as the strongest of the jaw muscles.",
+    attach: "A fan over the side of the skull at the temple and the tough sheet that covers it, narrowing to a tendon that passes under the cheekbone arch to the coronoid process, a pointed part at the front of the jaw's upright branch.",
+    nerve: "Deep temporal nerves, from the mandibular division (V3) of the trigeminal nerve.",
+    ppl: null,
+    pain: "Often felt at the temple, and can spread above the eyebrow, behind the eye and into the upper teeth. It's one of the muscles most studied in tension-type headache, though that doesn't show it causes the headache.",
+    triggers: "Clenching or grinding, stress, long spells of concentration, chewing gum.",
+    check: "Rest your fingertips on both temples and clench gently: you'll feel the muscle tighten. Relax, then press with flat fingers. Tenderness that brings on your usual temple ache makes this muscle worth considering. A new headache with a tender scalp or temple, or jaw pain when you chew, isn't one to check here: see the warning signs. This check can't rule out the teeth, the jaw joint, the sinuses or a nerve.",
+    aliases: ["temple muscle", "temporal muscle", "temple", "chewing muscle", "temporal headache"],
+    exercises: ["jaw-rest", "jaw-massage", "jaw-sideways"],
+  },
+  {
+    id: "medial-pterygoid", group: "chewing", layer: 3,
+    name: "Medial pterygoid (inner jaw muscle)", latin: "Musculus pterygoideus medialis",
+    does: "Lifts the jaw to close the mouth. Working with the lateral pterygoid, it pushes the jaw forward and swings it to the side.",
+    attach: "Inner side of a thin plate of bone behind the upper jaw (the lateral pterygoid plate), down and back to the inside of the angle of the jaw. It's the masseter's twin on the inner side of the jaw bone.",
+    nerve: "Nerve to medial pterygoid, from the mandibular division (V3) of the trigeminal nerve.",
+    ppl: null,
+    pain: "Can be felt deep in the mouth, in the throat and below the angle of the jaw, sometimes as pain when you swallow or a full feeling in the ear.",
+    triggers: "Clenching or grinding, long dental appointments with the mouth held wide open.",
+    check: "It's too deep to feel from outside, so check how far you open instead. Open gently and see how many fingers, stacked flat, fit between your top and bottom front teeth, without forcing. About three is often quoted as typical. Opening that feels tight without pain at the joint points to the closing muscles, this one among them. It can't be told apart from the masseter, the temporalis or the joint, and limited opening with swelling or a fever is a dental problem first: see the warning signs.",
+    aliases: ["pterygoid", "internal pterygoid", "inner jaw muscle"],
+    exercises: ["jaw-rest", "jaw-opening", "jaw-sideways"],
+  },
+  {
+    id: "lateral-pterygoid", group: "chewing", layer: 4,
+    name: "Lateral pterygoid (jaw joint muscle)", latin: "Musculus pterygoideus lateralis",
+    does: "Pulls the jaw forward and helps open the mouth. One side alone moves the jaw towards the other side. It also guides the rounded end of the jaw and the joint's cartilage disc back into place as the mouth closes.",
+    attach: "Two heads. The lower one runs from the outer face of the lateral pterygoid plate to the neck of the jaw's rounded end (the condyle). The upper one runs from the sphenoid bone at the base of the skull to the front of the jaw joint and its disc.",
+    nerve: "Nerve to lateral pterygoid, from the mandibular division (V3) of the trigeminal nerve.",
+    ppl: null,
+    pain: "Can be felt as a deep ache in or just in front of the ear and in the cheek. People often describe it as pain in the joint itself.",
+    triggers: "Clenching or grinding, jutting the jaw forward, chewing gum, holding the mouth wide open for a long time.",
+    check: "Rest your fingers against one side of your jaw and slide the jaw gently sideways into them, then jut it forward a little. A deep ache near the joint that you recognise makes this muscle worth considering. No home check can tell it apart from the joint or its disc, and it can't rule out the ear or the teeth.",
+    aliases: ["pterygoid", "external pterygoid", "jaw joint muscle", "tmj muscle"],
+    exercises: ["jaw-opening", "jaw-open-resisted", "jaw-sideways"],
+  },
+  {
+    id: "digastric", group: "chin", layer: 2,
+    name: "Digastric (under-chin muscle)", latin: "Musculus digastricus",
+    does: "Pulls the jaw down to help open the mouth, especially against resistance. When the jaw is held closed, it lifts the hyoid bone and the voice box as you swallow.",
+    attach: "Two bellies joined by a tendon just above the hyoid bone, the small U-shaped bone at the top of the throat. The front belly starts on the inside of the lower jaw near the chin; the back belly starts in a notch behind the ear, by the mastoid.",
+    nerve: "Front belly: nerve to mylohyoid, from the mandibular division (V3) of the trigeminal nerve. Back belly: facial nerve (CN VII).",
+    ppl: null,
+    pain: "Can be felt under the chin, in the upper neck behind the angle of the jaw and behind the ear.",
+    triggers: "Holding the mouth open for long spells, forcing wide yawns, clenching with the head poked forward. The evidence for these is thin.",
+    check: "Press gently upward under your chin, then just behind the angle of the jaw. Then open your mouth a little against light pressure from your thumb under your chin. A tender spot or a familiar ache there makes this muscle worth considering. It can't be told apart from the glands, the teeth or the throat in this area, and a hard or painful lump under the jaw needs a GP or dentist to look at it.",
+    aliases: ["under chin muscle", "jaw opener", "digastric muscle", "floor of the mouth"],
+    exercises: ["jaw-open-resisted", "jaw-opening"],
+  },
+  {
+    id: "frontalis", group: "forehead", layer: 1,
+    name: "Frontalis (forehead muscle)", latin: "Occipitofrontalis, venter frontalis",
+    does: "Raises the eyebrows and wrinkles the forehead. It's the front half of a muscle that runs over the scalp to the back of the head.",
+    attach: "It has no bone attachment. It runs from the skin of the eyebrows and forehead up to the tough sheet of tissue over the scalp, just in front of the crown.",
+    nerve: "Temporal branches of the facial nerve (CN VII).",
+    ppl: null,
+    pain: "Can be felt across the forehead and above the eyebrows, sometimes as a tight band across the front of the head.",
+    triggers: "Long spells of concentration, screen work, squinting or frowning, stress.",
+    check: "Raise your eyebrows high, then let them drop and feel your forehead soften under your fingertips. If a tight, tender forehead eases as you let go, muscle tension may be part of the picture. It can't rule out the sinuses, the eyes, migraine or other causes of headache.",
+    aliases: ["forehead muscle", "occipitofrontalis", "frontal belly", "eyebrow muscle", "brow"],
+    exercises: ["forehead-release", "jaw-rest"],
+  },
+
   // ---- lower back and core ----
   {
     id: "latissimus-dorsi", group: "trunk-back", layer: 1,
@@ -671,6 +774,83 @@ export const BODY_MUSCLES = [
 //   r       radius: full glow out to 0.4 r, fading to nothing at r
 // Every spot is drawn on both sides of the body; a spot on the midline is drawn once.
 export const BODY_PATTERNS = [
+  // ---- head, face and jaw: rankings are a synthesis from function and referral maps, not a guideline ----
+  { id: "head-jaw-joint", region: "head", kind: "where", name: "Jaw joint, in front of the ear", note: "Just in front of the ear canal, where you feel the jaw move as you open. Pain here is often the joint itself, and the ear and teeth can feel the same; if the jaw locks or won't open fully, skip the finder and check the warning signs.", area: [{ at: "head", off: [5.8, 1.9, 2.9], r: 2.6 }], aliases: ["tmj", "tmd", "jaw pain", "jaw joint pain", "tmj pain", "temporomandibular joint", "temporomandibular disorder"], muscles: [
+    { id: "lateral-pterygoid", why: "Sits deep, just in front of the joint" },
+    { id: "masseter", why: "Deep fibres blend into the joint's front" },
+    { id: "temporalis", why: "Back fibres pass just above the joint" },
+    { id: "medial-pterygoid", why: "Deep ache just below the joint" },
+  ] },
+  { id: "head-cheek", region: "head", kind: "where", name: "Cheek and angle of the jaw", note: "From the cheekbone down to the corner of the jaw. Teeth, gums, sinuses and glands cause pain here too: toothache with a swollen face or a fever needs an urgent dentist or NHS 111 the same day, and sudden electric-shock stabs set off by touch or brushing your teeth sound like trigeminal neuralgia, a nerve problem rather than a muscle one, so see a GP.", area: [{ at: "head", off: [5.6, 0.8, 6.4], r: 3 }, { at: "head", off: [5.6, -1.3, 5.6], r: 3.2 }, { at: "head", off: [5, -3, 4.6], r: 2.8 }], aliases: ["cheek pain", "jaw pain", "jaw ache", "face pain", "trigeminal neuralgia"], muscles: [
+    { id: "masseter", why: "The thick muscle you feel when you clench" },
+    { id: "medial-pterygoid", why: "Its twin on the inside of the jaw" },
+    { id: "digastric", why: "Back belly passes behind the angle" },
+    { id: "sternocleidomastoid", why: "Its top end sits just behind the angle" },
+  ] },
+  { id: "head-temple", region: "head", kind: "where", name: "Temple", note: "The side of the head above the cheekbone, in front of and above the ear. A new headache with a tender scalp or temple, jaw pain when you chew, or blurred or double vision needs a GP or NHS 111 the same day, so skip the finder and check the warning signs.", area: [{ at: "head", off: [6.5, 6.2, 4.8], r: 4 }], aliases: ["temple pain", "headache", "tension headache", "side of the head", "temporal headache"], muscles: [
+    { id: "temporalis", why: "Lies right under the temple" },
+    { id: "masseter", why: "Often refers up to the temple" },
+    { id: "upper-trapezius", why: "Common in tension-type headache" },
+    { id: "sternocleidomastoid", why: "Can refer to the temple and head" },
+    { id: "suboccipitals", why: "Skull-base ache that wraps forward" },
+  ] },
+  { id: "head-forehead", region: "head", kind: "where", name: "Forehead and above the eyebrows", note: "Across the forehead or just above the brows. Sinusitis, eye problems, migraine and other headaches cause pain here too, and a sudden severe headache, or one with a fever and a stiff neck, needs the warning signs, not the finder.", area: [{ at: "head", off: [0, 8.2, 11.4], r: 4.5 }, { at: "head", off: [3.6, 7.6, 10.4], r: 3.5 }], aliases: ["forehead pain", "headache", "tension headache", "brow pain", "frontal headache", "eyebrow pain"], muscles: [
+    { id: "frontalis", why: "The forehead muscle itself" },
+    { id: "temporalis", why: "Front fibres reach above the brow" },
+    { id: "semispinalis-capitis", why: "Can refer over the head towards the eye" },
+    { id: "sternocleidomastoid", why: "Can refer to the forehead and eye" },
+  ] },
+  { id: "head-under-chin", region: "head", kind: "where", name: "Under the chin", note: "The soft floor of the mouth, between the chin and the top of the throat. Glands, a dental abscess, salivary stones and the throat cause pain here too, so see a GP or dentist about any lump, and if swelling makes it hard to breathe or swallow, check the warning signs now.", area: [{ at: "head", off: [0, -5.8, 7.6], r: 3 }, { at: "head", off: [2.4, -5.2, 6.4], r: 2.5 }], aliases: ["under chin pain", "chin pain", "floor of the mouth", "under the jaw"], muscles: [
+    { id: "digastric", why: "Front belly lies right there" },
+    { id: "medial-pterygoid", why: "Can be felt towards the throat" },
+    { id: "scalenes", why: "Front of the neck, a weaker link" },
+  ] },
+  { id: "head-teeth", region: "head", kind: "where", name: "Aching teeth, with healthy teeth", note: "See a dentist first: decay, an abscess, a cracked tooth and grinding all cause toothache, sinusitis and trigeminal neuralgia can feel like it, and jaw pain can come from the heart. Only once a dentist has found your teeth healthy are these muscles worth considering.", area: [{ at: "head", off: [3.6, -1.6, 7.4], r: 2.8 }], aliases: ["toothache", "tooth pain", "aching teeth", "teeth pain"], muscles: [
+    { id: "masseter", why: "Can be felt in the back teeth" },
+    { id: "temporalis", why: "Can be felt in the upper teeth" },
+    { id: "lateral-pterygoid", why: "Deep in the upper jaw, a weaker link" },
+  ] },
+  { id: "head-ear", region: "head", kind: "where", name: "In or around the ear", note: "A deep ache in or around the ear, or a full feeling. Ear infections and wax cause this too, so contact a GP or NHS 111 the same day for discharge, swelling round the ear, a change in hearing, a high temperature, or earache that lasts more than 2 to 3 days.", area: [{ at: "head", off: [6.4, 2.3, 1.3], r: 3 }], aliases: ["earache", "ear pain", "ear ache", "full ear", "ear fullness"], muscles: [
+    { id: "lateral-pterygoid", why: "Sits just in front of the ear canal" },
+    { id: "medial-pterygoid", why: "Linked with a full feeling in the ear" },
+    { id: "masseter", why: "Deep fibres can refer to the ear" },
+    { id: "digastric", why: "Back belly starts behind the ear" },
+  ] },
+  { id: "head-chewing", region: "head", kind: "when", name: "Chewing or yawning", note: "Pain as you bite, chew or open wide. The jaw joint and the teeth often hurt this way too, and jaw pain when you eat that comes with a tender scalp or blurred or double vision needs a GP or NHS 111 the same day: check the warning signs.", aliases: ["pain when chewing", "chewing pain", "yawning", "biting", "jaw pain eating"], muscles: [
+    { id: "masseter", why: "The main closer, sore when overloaded" },
+    { id: "temporalis", why: "Shares the load, aches at the temple" },
+    { id: "medial-pterygoid", why: "Sore on wide opening" },
+    { id: "lateral-pterygoid", why: "Works as you open and slide the jaw forward" },
+  ] },
+  { id: "head-waking", region: "head", kind: "when", name: "Waking with a sore jaw or headache", note: "A tired jaw or a temple headache first thing can come from clenching or grinding in your sleep, which often goes unnoticed; a dentist can check your teeth for wear. A headache with being sick, or one that keeps getting worse, needs a GP or NHS 111 the same day.", aliases: ["teeth grinding", "bruxism", "grinding teeth", "night grinding", "morning headache", "sore jaw in the morning"], muscles: [
+    { id: "masseter", why: "Works hard in sleep clenching or grinding" },
+    { id: "temporalis", why: "Morning ache at the temple" },
+    { id: "medial-pterygoid", why: "Stiff opening on waking" },
+  ] },
+  { id: "head-clicking", region: "head", kind: "when", name: "Clicking or locking when you open", note: "Clicking mostly comes from the joint and its disc rather than a muscle. If your jaw locks or won't open fully, contact a GP or NHS 111 the same day, and if it's stuck open, or won't open while your face or neck swells, call 999 or go to A&E.", aliases: ["jaw clicking", "clicking jaw", "jaw popping", "jaw locking", "locked jaw", "lockjaw", "tmj", "tmd"], muscles: [
+    { id: "lateral-pterygoid", why: "Steers the joint and its disc" },
+    { id: "masseter", why: "A tight closer limits opening" },
+    { id: "temporalis", why: "Tightens to guard the joint" },
+  ] },
+  { id: "head-dentist", region: "head", kind: "when", name: "After a long dental appointment", note: "Stiff or sore after holding your mouth open for a long time. Spreading swelling, a fever, severe tooth pain or a bite that feels different needs your dentist the same day.", aliases: ["after the dentist", "dental work", "dentist", "sore jaw after dentist"], muscles: [
+    { id: "lateral-pterygoid", why: "Held wide open for a long time" },
+    { id: "medial-pterygoid", why: "Stretched while the mouth is wide open" },
+    { id: "masseter", why: "Guards the jaw afterwards" },
+    { id: "digastric", why: "Holds against the dentist's pressure" },
+  ] },
+  { id: "head-day-headache", region: "head", kind: "when", name: "Headache that builds through the day", note: "A tight band or pressure that builds with screen work, stress or poor sleep fits tension-type headache, which has no firmly established muscle source. See a GP if headaches come several times a week or aren't getting better, and check the warning signs for any sudden or severe headache.", aliases: ["tension headache", "headache", "tension-type headache", "stress headache", "screen headache"], muscles: [
+    { id: "temporalis", why: "Clenching while you concentrate" },
+    { id: "frontalis", why: "Tight forehead with screens and squinting" },
+    { id: "upper-trapezius", why: "Shoulders creep up, refers to the temple" },
+    { id: "suboccipitals", why: "Chin pokes forward, band to the eye" },
+    { id: "masseter", why: "Clenching adds to it" },
+  ] },
+  { id: "head-clenching", region: "head", kind: "when", name: "Clenching when stressed or concentrating", note: "Teeth pressed together by day, often without noticing; outside eating, aim to keep them slightly apart. Jaw pain that comes on with effort or with chest pain may be your heart, so check the warning signs.", aliases: ["clenching", "jaw clenching", "teeth clenching", "stress", "clenched jaw"], muscles: [
+    { id: "masseter", why: "The classic clenching muscle" },
+    { id: "temporalis", why: "Adds a temple ache" },
+    { id: "frontalis", why: "Frowning and brow tension" },
+    { id: "digastric", why: "Tight under the chin, weak evidence" },
+  ] },
   { id: "core-across", region: "core", kind: "where", name: "Across the lower back", note: "A band of ache on both sides of the spine. Back pain like this often eases within a few weeks.", area: [{ at: "l1", to: "l5", f: [0, 1], off: [3.5, 0, -8.5], r: 5.5 }], aliases: ["lower back pain", "back pain", "lumbago", "backache"], muscles: [
     { id: "lumbar-erectors", why: "The broad band either side of the spine" },
     { id: "multifidus", why: "Deep ache close to the spine" },
@@ -960,6 +1140,49 @@ export const BODY_PATTERNS = [
 ];
 
 export const BODY_EXERCISES = {
+  // ---- head, face and jaw: commonly taught by NHS physio and dental leaflets (docs/research/head-notes.md) ----
+  "jaw-rest": {
+    name: "Resting jaw position", type: "Control", kit: "None", dose: "5 holds of 10 seconds, then check your jaw often through the day",
+    steps: ["Sit upright and rest the tip of your tongue lightly on the roof of your mouth.", "Let your teeth part and your lips close.", "Hold, breathing slowly, with your jaw and forehead soft.", "Release, and notice how your jaw feels."],
+    feel: "A heavy, loose jaw. Nothing should strain.",
+    ease: "No effort: let the teeth drift apart rather than pulling them apart. Outside eating, this is the position to come back to, especially at a screen. Stop if it brings on pain.",
+    aliases: ["jaw relaxation", "jaw rest", "tongue up teeth apart", "jaw exercises", "tmj exercises"],
+  },
+  "jaw-opening": {
+    name: "Controlled jaw opening", type: "Mobility", kit: "Mirror", dose: "5 slow opens with a 2 second pause, 5 times a day",
+    steps: ["Face a mirror with your fingertips on the jaw joints just in front of your ears and your tongue on the roof of your mouth.", "Open slowly, straight down, only as far as is comfortable.", "Pause, checking in the mirror that your chin stays in the middle.", "Close slowly, keeping your tongue up."],
+    feel: "A light stretch, and the joints rolling smoothly under your fingertips.",
+    ease: "Stay gentle and never force the jaw open. If your chin drifts to one side and you can't bring it back to the middle, open less. Stop for a painful click, a jaw that catches or locks, or pain that lingers afterwards.",
+    aliases: ["jaw exercises", "tmj exercises", "mouth opening exercise", "jaw opening exercise"],
+  },
+  "jaw-open-resisted": {
+    name: "Resisted jaw opening", type: "Strength", kit: "None", dose: "5 holds of 5 seconds, 5 times a day",
+    steps: ["Sit relaxed with your teeth slightly apart and your thumb under your chin.", "Open your mouth a little against light pressure from your thumb.", "Hold, keeping your head still.", "Relax, swallow and let your jaw rest."],
+    feel: "Gentle effort under the chin.",
+    ease: "Light pressure only, just enough to feel the jaw working against it. Never force it. Stop for pain at the joint, a painful click, locking, or pain that lingers afterwards.",
+    aliases: ["jaw exercises", "tmj exercises", "resisted opening", "chin resistance exercise"],
+  },
+  "jaw-sideways": {
+    name: "Resisted sideways jaw push", type: "Strength", kit: "None", dose: "10 holds of 5 seconds each side",
+    steps: ["Sit relaxed, teeth slightly apart, with the fingers of one hand flat on the same cheek, over the jaw.", "Press your jaw gently sideways into your fingers, which stop it moving.", "Hold.", "Relax, then do the other side."],
+    feel: "Light effort at the side of the jaw.",
+    ease: "A light push, no more. Stop for pain at the joint, clicking with pain, locking, or pain that lingers afterwards. If you've been told your problem is mainly in the joint itself, check with your dentist or physio before doing this one.",
+    aliases: ["jaw exercises", "tmj exercises", "side to side jaw", "lateral jaw exercise"],
+  },
+  "jaw-massage": {
+    name: "Jaw and temple massage", type: "Mobility", kit: "None, or a warm pack", dose: "About 1 minute on each area, 3 times a day",
+    steps: ["Rest your fingertips on the thick muscle of your cheeks, below the cheekbones.", "Make slow, gentle circles over the cheek muscles.", "Move your fingertips up to your temples and circle there.", "Lower your hands and let your jaw hang loose, teeth apart."],
+    feel: "Tender but relieving. It shouldn't hurt sharply.",
+    ease: "Gentle pressure only, with clean hands. Warmth for 15 to 20 minutes first can help. Stop for sharp pain, bruising or sore skin. A new headache with a tender scalp or temple isn't one to massage: check the warning signs.",
+    aliases: ["jaw massage", "face massage", "masseter massage", "temple massage", "self massage"],
+  },
+  "forehead-release": {
+    name: "Forehead release", type: "Control", kit: "None", dose: "5 slow rounds, when your forehead feels tight",
+    steps: ["Sit relaxed with your shoulders down.", "Raise your eyebrows gently.", "Hold for about 2 seconds.", "Breathe out slowly and let your forehead go smooth."],
+    feel: "The forehead lifting, then a softening across it as you let go.",
+    ease: "Raise gently, not to a strain. It's a way to let go of tension, not a treatment for migraine or sinus pain. Stop if it brings on or worsens a headache.",
+    aliases: ["forehead relaxation", "eyebrow raise", "brow release", "face relaxation"],
+  },
   // ---- lower back and core: pain and stretch ----
   "cat-cow": {
     name: "Cat cow", type: "Mobility", kit: "Mat", dose: "8 to 10 slow rounds, once or twice a day",
